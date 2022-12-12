@@ -4,6 +4,8 @@
 import numpy as np
 import pandas as pd
 import collections
+import os
+import shutil
 
 def generate_aggregated_classification(df, categories):
     
@@ -124,13 +126,13 @@ def prioritise_write_output(df, Transcript_Classifications, output_dir, gene, in
     
     # Create tuple for quick access for generating output files
     Final_Output = [(i.split(",",2)[0], i.split(",",2)[1]) for i in Output]
+    print("**** Final classification of transcripts by...")
     for i in set([x[1] for x in Final_Output]):
         path = output_dir + "/" + gene + "_" +  str(i) 
-        print("Filtering for:" + i)
         filter_output = [x[0] for x in list(filter(lambda cate: cate[1] == i, Final_Output))]
         # subset the bedfiles from the group of transcript per categories
         group = bed[bed[3].isin(filter_output)]
-        print(len(group.index))
+        print(i,":", len(group.index))
         # Splitting into multiple files by 1000 if more than 100 transcripts
         if len(group) > 1000:
             for count, i in enumerate(np.array_split(group, np.ceil(len(group)/1000)),1):
@@ -159,16 +161,11 @@ def populate_classification(Transcript_Classifications, A5A3, IR_Counts, ES_Coun
         new_col = Transcript_Classifications['isoform'].map(input_dict).fillna(Transcript_Classifications[col])
         return(new_col)
     
-    
-    if(sum(Transcript_Classifications["A5A3"]) > 0): 
-      print("WHAT")
-      #print(A5A3["transcript_id"]))
-      Transcript_Classifications[['A5A3']] = remap_transcript_classification("A5A3", collections.Counter(A5A3["transcript_id"]))
-    
-    print("NEXT")
-    if(sum(Transcript_Classifications["IR"]) > 0): Transcript_Classifications[['IR']] = remap_transcript_classification("IR", dict(zip(IR_Counts["transcript_id"],IR_Counts["IR"])))
+   
+    if(sum(Transcript_Classifications["A5A3"]) > 0): Transcript_Classifications['A5A3'] = remap_transcript_classification("A5A3", collections.Counter(A5A3["transcript_id"]))
+    if(sum(Transcript_Classifications["IR"]) > 0): Transcript_Classifications['IR'] = remap_transcript_classification("IR", dict(zip(IR_Counts["transcript_id"],IR_Counts["IR"])))
     Transcript_Classifications['ES'] = remap_transcript_classification("ES", dict(zip(ES_Count.index,ES_Count["Count"])))
-    
+     
     if(len(NE) > 0):
         Transcript_Classifications['NE_1st'] = remap_transcript_classification("NE_1st", generate_NE_dict("Beyond_First"))
         Transcript_Classifications['NE_Int'] = remap_transcript_classification("NE_Int", generate_NE_dict("Internal_NovelExon"))
@@ -179,9 +176,6 @@ def populate_classification(Transcript_Classifications, A5A3, IR_Counts, ES_Coun
 
 
 def delete_make_dir(output_dir):
-    try:
-        shutil.rmtree(output_dir)
-    except:
-        print("1st Round of annotations")
+    shutil.rmtree(output_dir)
     os.mkdir(output_dir)
     os.mkdir(output_dir + "/Stats")
