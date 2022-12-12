@@ -65,7 +65,7 @@ def identify_intron_retention(df, All_FilteredParsed, gencode):
             gencode_IR.extend(int(i.split("_")[1]) for i in IR_df["GencodeExon"].values) # append the exon number
 
             # last exon regardless of classification 
-            IR_df["TranscriptExon"] = [int(i.replace("Exon","")) for i in IR_df["TranscriptExon"]]
+            IR_df.loc[:,("TranscriptExon")] = [int(i.replace("Exon","")) for i in IR_df.loc[:,("TranscriptExon")]]
             last_exon = IR_df.loc[IR_df['TranscriptExon'].idxmax(),"GencodeExon"].replace("Gencode_","")
             #print(last_exon)
 

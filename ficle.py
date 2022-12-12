@@ -30,6 +30,7 @@ from src import identify_alternativeprime as aprime
 from src import finalise_output as fo
 from src import generate_multiregion as gm
 from src import classify_mapt_isoforms as mapt
+pd.options.mode.chained_assignment = None  # default='warn'
 
 def annotate_gene(args):
     gencode_gtf = args.ref + args.gene + "_gencode.gtf"
@@ -62,17 +63,16 @@ def annotate_gene(args):
     
 
     # prepare directory
-    try:
-        fo.delete_make_dir(output_dir)
-    except:
-        print("Unable to delete directory") 
+    print("(Re)generating files")
+    fo.delete_make_dir(output_dir)
+
 
     ## read in gencode and transcriptome gtf
     #gencode = pd.read_csv(args.ref + args.gene + "_Manual_gencode.csv") 
     gencode = prep.parse_gencode_reference(gencode_gtf, args.gene)
     gencode.rename({'transcript': 'transcript_id'}, axis=1, inplace=True)
 
-    df = prep.parse_transcriptome_gtf(args.i_gtf, args.gene, noISM) 
+    df = prep.parse_transcriptome_gtf(args.i_gtf, args.gene, args.noISM) 
 
     # Parse through the transcriptome, classify and filter 
     All_FilteredParsed = []
@@ -184,8 +184,9 @@ def main():
     parser.add_argument('--o_dir', "--output_dir", help='\t\tOutput path for the annotation and associated files')
 
     args = parser.parse_args()
+    print("************ Running FICLE...", file=sys.stdout)
     annotate_gene(args)    
-    print("All Done")
+    print("**** All Done! ****")
     
     
 if __name__ == "__main__":

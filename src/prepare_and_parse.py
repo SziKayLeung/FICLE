@@ -3,7 +3,11 @@
 
 from gtfparse import read_gtf
 import numpy as np
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
+import sys
+
   
 def determine_order(gencode):
     # extract only the first transcript of interest for determining order
@@ -45,6 +49,8 @@ def parse_gencode_reference(gencode_gtf, gene):
     
     # obtain coordinates of known exons, not exons without exon_number in genocode are dropped
     # only using transcripts that are protein-coding (removing lncRNA, antisense to gene etc)
+    print("**** Extracting gtf", file=sys.stdout)
+    print(gencode_gtf, file=sys.stdout)
     gencode = read_gtf(gencode_gtf)
     gencode = gencode[gencode["feature"] == "exon"]
     gencode = gencode[gencode["gene_type"] == "protein_coding"]
@@ -163,9 +169,8 @@ def parse_transcriptome_gtf(input_gtf, gene, noISMpath):
     # correct error in TALON gtf for having both Pt2kB and Pt2kb classifications
     df.loc[df["gene_id"] == "Ptk2B","gene_id"] = "Ptk2b"
     
-    print("Extracting for transcripts associated with:", gene)
+    print("**** Extracting for transcripts associated with:", gene)
     df = df[df["gene_id"] == gene]
-    print("Features from Input Gtf:", str(set(df["feature"])))
     df = df[df["feature"] == "exon"]
     print("Number of Detected transcripts:", len(df["transcript_id"].unique()))
    
