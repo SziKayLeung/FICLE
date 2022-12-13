@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # Matching Exons
 
-from .prepare_and_parse import class_by_transcript
+from prepare_and_parse import class_by_transcript
 
 def identify_all_matching_exons(gencode, df, All_FilteredParsed):
     

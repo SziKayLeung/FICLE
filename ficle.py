@@ -72,7 +72,7 @@ def annotate_gene(args):
     gencode = prep.parse_gencode_reference(gencode_gtf, args.gene)
     gencode.rename({'transcript': 'transcript_id'}, axis=1, inplace=True)
 
-    df = prep.parse_transcriptome_gtf(args.i_gtf, args.gene, args.noISM) 
+    df = prep.parse_transcriptome_gtf(args.i_gtf, args.gene, noISM) 
 
     # Parse through the transcriptome, classify and filter 
     All_FilteredParsed = []

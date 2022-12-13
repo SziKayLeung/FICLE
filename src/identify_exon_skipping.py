@@ -5,9 +5,9 @@ import pandas as pd
 import numpy as np 
 from collections import Counter
 
-from .prepare_and_parse import class_by_transcript
-from .prepare_and_parse import generate_split_table
-from .prepare_and_parse import determine_order
+from prepare_and_parse import class_by_transcript
+from prepare_and_parse import generate_split_table
+from prepare_and_parse import determine_order
 
 def tabulate_exon_presence(gencode, df, All_FilteredParsed):
     df_transcript_id = df['transcript_id'].unique()

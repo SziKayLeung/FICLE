@@ -2,9 +2,9 @@
 # alternative promoter and alternative terminator
 
 import pandas as pd
-from .prepare_and_parse import class_by_transcript_pd
-from .prepare_and_parse import generate_split_table
-from .prepare_and_parse import determine_order
+from prepare_and_parse import class_by_transcript_pd
+from prepare_and_parse import generate_split_table
+from prepare_and_parse import determine_order
 
 def identify_novel_exon(df, gencode, All_FilteredParsed):
         

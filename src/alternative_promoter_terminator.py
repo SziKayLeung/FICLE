@@ -2,8 +2,8 @@
 # alternative promoter and alternative terminator
 
 import pandas as pd
-from .prepare_and_parse import manual_gencode
-from .prepare_and_parse import class_by_transcript_pd
+from prepare_and_parse import manual_gencode
+from prepare_and_parse import class_by_transcript_pd
 
 def identify_alternative_promoter(df, ES,gene, gencode, gencode_gtf, All_FilteredParsed):
     '''

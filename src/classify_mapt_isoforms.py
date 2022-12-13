@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from .prepare_and_parse import reidentify_isoform_dataset
+from prepare_and_parse import reidentify_isoform_dataset
 
 def identify_mapt_exon2_3_17(species, gencode):
     '''

@@ -7,6 +7,10 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import sys
+import os
+
+srcPath = os.path.dirname(os.path.realpath(__file__)) 
+sys.path.insert(1, srcPath)
 
   
 def determine_order(gencode):
@@ -144,7 +148,7 @@ def replace_geneid(df, noISM):
         return(df)
     
 
-def parse_transcriptome_gtf(input_gtf, gene, noISMpath):
+def parse_transcriptome_gtf(input_gtf, gene, noISM):
     
     '''
     Aim: Parse Input Gtf of target gene 
@@ -152,9 +156,6 @@ def parse_transcriptome_gtf(input_gtf, gene, noISMpath):
         
     # read gtf and filter only on exon (should only essentially remove "transcript" in gtf)
     df = read_gtf(input_gtf)
-    
-    # keep only those that are retained from ISM filtering (i.e. removed 3'ISM from SQANTI)
-    noISM = pd.read_csv(noISMpath, sep = "\t")
     
     # check if needs replacing the gene id column in the gtf from "PB.XX" to the gene name 
     df = replace_geneid(df, noISM)

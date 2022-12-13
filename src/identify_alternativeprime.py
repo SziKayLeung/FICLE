@@ -2,9 +2,9 @@
 # A5A3 and AF
 
 import pandas as pd
-from .prepare_and_parse import class_by_transcript
-from .prepare_and_parse import class_by_transcript_pd
-from .prepare_and_parse import generate_split_table
+from prepare_and_parse import class_by_transcript
+from prepare_and_parse import class_by_transcript_pd
+from prepare_and_parse import generate_split_table
 
 def identify_A5A3_transcripts(df, All_FilteredParsed):
     

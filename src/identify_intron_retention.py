@@ -2,8 +2,8 @@
 # intron retention
 
 import pandas as pd
-from .prepare_and_parse import generate_split_table
-from .prepare_and_parse import class_by_transcript_pd
+from prepare_and_parse import generate_split_table
+from prepare_and_parse import class_by_transcript_pd
 
 def identify_intron_retention(df, All_FilteredParsed, gencode):
     

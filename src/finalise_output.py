@@ -176,6 +176,8 @@ def populate_classification(Transcript_Classifications, A5A3, IR_Counts, ES_Coun
 
 
 def delete_make_dir(output_dir):
-    shutil.rmtree(output_dir)
+    if os.path.isdir(output_dir):  
+      shutil.rmtree(output_dir)
+      
     os.mkdir(output_dir)
     os.mkdir(output_dir + "/Stats")
