@@ -4,6 +4,7 @@
 import pandas as pd
 import numpy as np 
 from collections import Counter
+import sys
 
 from prepare_and_parse import class_by_transcript
 from prepare_and_parse import generate_split_table
@@ -25,6 +26,9 @@ def tabulate_exon_presence(gencode, df, All_FilteredParsed):
     1001 = Gencode exon is not registered*
     
     *Transcript is matching a reference transcript with fewer exons than other reference transcripts
+    No need to address order (sense/antisense) as coordinates and exon naming 
+    for gencode is addressed in determine_order() and parse_gencode_reference()
+    for transcript df in parse_transcript()
     '''
     
     max_exon = max([int(i) for i in gencode["updated_exon_number"]])
@@ -37,9 +41,6 @@ def tabulate_exon_presence(gencode, df, All_FilteredParsed):
     # Output as table 
     df2 = pd.DataFrame(columns = Gencode_exons)
     data = []
-    
-    # Order is essential for determining the last exon and for registering if fewer than the known reference for 1001 classification
-    gencode, order = determine_order(gencode)
     
     # Iterate through each transcript
     #for transcript in ["PB.4515.1"]:
@@ -82,51 +83,28 @@ def tabulate_exon_presence(gencode, df, All_FilteredParsed):
         for g in Gencode_exons:
             # filter the classifcation for each corresponding gencode exon
             Gencode_filter = [ele[0] for ele in Gencode_tuple if ele[1] == g]
-            
-            if order == "sense":
-                #print(int(g.split("_",2)[1]))
-                #print(int(maxgencodexon.split("_",1)[1]))
-                if int(g.split("_",2)[1]) > int(maxgencodexon.split("_",1)[1]):
-                    output.append(1001)
+               
+            #print(int(g.split("_",2)[1]))
+            #print(int(maxgencodexon.split("_",1)[1]))
+            if int(g.split("_",2)[1]) > int(maxgencodexon.split("_",1)[1]):
+                output.append(1001)
 
-                # if the number of classification for that gencode exon has other classifications beside "NO"
-                # note: from filtering parsed output, all other classifications prioritised over "no"
-                # therefore list would not contain both "no" and other classifications as the "no" classifications are previously filtered
-                #if len(Gencode_filter) == 0:
-                #    output.append(1001) ## 1001 = Absent, not detected
-                elif len(list(filter(lambda x: "No" not in x, Gencode_filter))) != 0:
-                    Gencode_split = [i.split("_",3)[0] for i in Gencode_filter]      
-                    #print(Gencode_split)
-                    if "IR" in Gencode_split or "IRMatch" in Gencode_split:
-                        output.append(2) ## IR
-                    elif any(elem in Labels for elem in Gencode_split):
-                        output.append(1) ## 1 = Present
-                    else:
-                        print("ERROR:", transcript)
+            # if the number of classification for that gencode exon has other classifications beside "NO"
+            # note: from filtering parsed output, all other classifications prioritised over "no"
+            # therefore list would not contain both "no" and other classifications as the "no" classifications are previously filtered
+            #if len(Gencode_filter) == 0:
+            #    output.append(1001) ## 1001 = Absent, not detected
+            elif len(list(filter(lambda x: "No" not in x, Gencode_filter))) != 0:
+                Gencode_split = [i.split("_",3)[0] for i in Gencode_filter]      
+                #print(Gencode_split)
+                if "IR" in Gencode_split or "IRMatch" in Gencode_split:
+                    output.append(2) ## IR
+                elif any(elem in Labels for elem in Gencode_split):
+                    output.append(1) ## 1 = Present
                 else:
-                    output.append(0) # only No classifications 
-            
-            else: # if antisense (mingencodeexon refers to the largest ref exon for the smallaest transcript exon given antisense)
-                if int(g.split("_",2)[1]) > int(mingencodexon.split("_",1)[1]):
-                    output.append(1001)
-
-                # if the number of classification for that gencode exon has other classifications beside "NO"
-                # note: from filtering parsed output, all other classifications prioritised over "no"
-                # therefore list would not contain both "no" and other classifications as the "no" classifications are previously filtered
-                #if len(Gencode_filter) == 0:
-                #    output.append(1001) ## 1001 = Absent, not detected
-                elif len(list(filter(lambda x: "No" not in x, Gencode_filter))) != 0:
-                    Gencode_split = [i.split("_",3)[0] for i in Gencode_filter]      
-                    #print(Gencode_split)
-                    if "IR" in Gencode_split or "IRMatch" in Gencode_split:
-                        output.append(2) ## IR
-                    elif any(elem in Labels for elem in Gencode_split):
-                        output.append(1) ## 1 = Present
-                    else:
-                        print("ERROR:", transcript)
-                else:
-                    output.append(0) # only No classifications 
-                
+                    print("ERROR:", transcript)
+            else:
+                output.append(0) # only No classifications                 
                 
         # Create a dictionary of the output to append to the table
         zipped = zip(list(df2), output)

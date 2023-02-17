@@ -23,13 +23,13 @@ def determine_order(gencode):
         gencode = gencode.sort_values("start", ascending=True)
         order = "sense"
     elif dat["start"][1] > dat["start"][len(dat)-1]: # antisense
+        gencode = gencode.rename({'start': 'end', 'end': 'start'}, axis=1) 
         gencode = gencode.sort_values("start", ascending=False)
         order = "antisense"
     else:
         print("Gencode incorrect order")
         
     return gencode, order 
-
 
 def parse_gencode_reference(gencode_gtf, gene):
     
@@ -59,6 +59,7 @@ def parse_gencode_reference(gencode_gtf, gene):
     gencode = gencode[gencode["feature"] == "exon"]
     gencode = gencode[gencode["gene_type"] == "protein_coding"]
     gencode = gencode.loc[gencode["gene_name"] == gene,][["start","end","exon_number","transcript_id"]] 
+    gencode["start_end"] = gencode['start'].astype(str) + gencode['end'].astype(str)
     gencode.replace("", float("NaN"), inplace=True)
     gencode.dropna(subset = ["exon_number"], inplace=True)
 
@@ -70,7 +71,10 @@ def parse_gencode_reference(gencode_gtf, gene):
     gencode.index = np.arange(1, len(gencode) + 1)
 
     # sort by start coordinates in order depending of if sense or antisense 
-    gencode, order = determine_order(gencode)
+    gencode, order = determine_order(gencode)    
+    
+    # drop duplicated exons with same start and exons to simplify the relabel
+    gencode = gencode.drop_duplicates(subset=["start_end"], keep='first')
 
     # relabel the exon_number so the exon_number goes in assending order if the current value is < previous value in the column
     prev_final = gencode.loc[1,'exon_number'] 
@@ -83,9 +87,41 @@ def parse_gencode_reference(gencode_gtf, gene):
         end = int(row["end"])
 
         # if the current value is the same as the previous value
-        # if the start or the end coordinate is the same as before, keep the previous value 
+        # if the start or the end coordinate is the same as before (but not situation 2) , keep the previous value 
         # otherwise update
-        if end == prev_end:
+        '''
+        ==> antisense
+        situation 1:                                 outcome:
+        A |end2___start2|-----------|end1___start1| (exon 2, exon 1)
+        B |end1_____________________________start1| (exon 1)
+           
+        situation 2:                                 outcome:
+        A |end2___start2|-----------|end1___start1|  (exon2, exon 1)
+        B |end1__________start1|                     (exon2)
+        
+        subsequently, if ends (A_end2 = B_end1) the same 
+        but the start (B_start1) is bigger or equal than previous end (A_end1), then situation 1
+        but the start (B_start1) is smaller than previous start (A_end1), then situation 2
+        
+        ==> sense
+        situation 1:                                 outcome:
+        A |start1___end1|-----------|start2___end2|  (exon 1, exon 2)
+        B |start1_____________________________end2|  (exon 1)
+           
+        situation 2:                                 outcome:
+        A |start1___end1|-----------|start2___end2|  (exon1, exon 2)
+                           B |start1__________end2|  (exon2)
+        *prev_start = A_start1
+        
+        situation 2:                                 outcome:
+        A |start1___end1|-----------|start2___end2|  (exon1, exon 2)
+        B |start1__________end1|                     (exon1)
+        
+        '''
+        
+        if end == prev_end and start >= prev_end and order == "antisense":
+            list_final.append(prev_final)
+        elif end == prev_end:
             list_final.append(prev_final)
         elif start == prev_start:
             list_final.append(prev_final)
@@ -100,6 +136,7 @@ def parse_gencode_reference(gencode_gtf, gene):
         prev_start = start
         prev_end = end
 
+
     # given creating an empty list, the first entry can be exon 1 or exon 2 
     # exon 1 if the top two entries belong to exon 1, or exon 2 if the second entry belongs to exon 2
     # therefore adjust the column in the later case by minus each element by 1, so starting from exon 1
@@ -107,7 +144,8 @@ def parse_gencode_reference(gencode_gtf, gene):
         list_final[:] = [int(num) - 1 for num in list_final]
 
     gencode["updated_exon_number"] = list_final
-    return(gencode)
+
+    return(gencode, order)
 
 
 def manual_gencode(gencode_gtf):
@@ -127,17 +165,14 @@ def manual_gencode(gencode_gtf):
     return(pd.DataFrame(output, columns=["start","end","original_exon_number","transcript"]))
 
 
-def replace_geneid(df, noISM):
+def replace_geneid(df, classf):
     if "PB" in df["gene_id"][0]:
         print("Convert gtf file from SQANTI: PB gene id to gene name")
         
         # Extract the PB. gene id and create dictionary with the gene name from the classification file
-        # Note this is from the subset classification file with 3'ISM removed
-        # therefore will not replace PB.Gene ID that were removed, but these will not be useful for targeted data
-        noISM["gene_id"] = ["PB." + i[1] for i in noISM["isoform"].str.split(".")]
+        classf["gene_id"] = ["PB." + i[1] for i in classf["isoform"].str.split(".")]
         
-        TargetGene = ["ABCA1","SORL1","MAPT","BIN1","TARDBP","APP","ABCA7","PTK2B","ANK1","FYN","CLU","CD33","FUS","PICALM","SNCA","APOE","TRPA1","RHBDF2","TREM2","VGF"]
-        dat = noISM[noISM["associated_gene"].isin(TargetGene)][["gene_id","associated_gene"]]
+        dat = classf[["gene_id","associated_gene"]]
         dat.drop_duplicates(keep='first')
         gene_id_name = dict(zip(dat.gene_id,dat.associated_gene))
         
@@ -148,7 +183,7 @@ def replace_geneid(df, noISM):
         return(df)
     
 
-def parse_transcriptome_gtf(input_gtf, gene, noISM):
+def parse_transcriptome_gtf(input_gtf, gene, classf):
     
     '''
     Aim: Parse Input Gtf of target gene 
@@ -158,27 +193,19 @@ def parse_transcriptome_gtf(input_gtf, gene, noISM):
     df = read_gtf(input_gtf)
     
     # check if needs replacing the gene id column in the gtf from "PB.XX" to the gene name 
-    df = replace_geneid(df, noISM)
+    df = replace_geneid(df, classf)
     
-    print("Original number of isoforms:", len(df["transcript_id"].unique()))
-    df = df.loc[df["transcript_id"].isin(noISM["isoform"])]
-    print("Retained number of isoforms after 3'ISM removal:", len(df["transcript_id"].unique()))
-    
-    # correct error in TALON gtf in misassigning transcripts for Apoe as ENSMUSG00000002981.10
-    df.loc[(df["seqname"] == "chr7") & (df["start"] >= 19696109) & (df["end"] <= 19699188),"gene_id"] = "Apoe"
-    
-    # correct error in TALON gtf for having both Pt2kB and Pt2kb classifications
-    df.loc[df["gene_id"] == "Ptk2B","gene_id"] = "Ptk2b"
+    print("Total number of isoforms:", len(df["transcript_id"].unique()))
     
     print("**** Extracting for transcripts associated with:", gene)
     df = df[df["gene_id"] == gene]
     df = df[df["feature"] == "exon"]
-    print("Number of Detected transcripts:", len(df["transcript_id"].unique()))
+    print("Number of detected transcripts:", len(df["transcript_id"].unique()))
    
     return(df)
 
    
-def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, IR_threshold):
+def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, IR_threshold, order):
 
     '''
     Aim: parse through each transcript to classify the splicing events based on coordinates
@@ -226,15 +253,14 @@ def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, IR_thres
     # Filter 
     parsed = []  
     filtered = parsed_transcriptome[parsed_transcriptome["transcript_id"] == transcript]
-    
-    # determine if gene is sense or antisense
-    gencode, order = determine_order(gencode)
-    
+
     if order == "sense": # sense i.e. first coordinate is smaller than last coordinate
         direction = "forward"
     else:
         direction = "reverse"
         filtered = filtered.iloc[::-1] # reverse the rows
+        # rename start and end; reverse strand, the larger coordinate is the start
+        filtered = filtered.rename({'start': 'end', 'end': 'start'}, axis=1)  
     
     # Reindex
     filtered.index = np.arange(1, len(filtered) + 1)
@@ -255,7 +281,7 @@ def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, IR_thres
             gencode_START = int(gencode_row["start"])
             gencode_END = int(gencode_row["end"])
             gencode_EXON = str(gencode["updated_exon_number"][gencode_index])
-            
+
             # For Intron retention classification 
             # Find the gencode end sites that have matching start sites to the target transcript start
             paired_ends = list(gencode[gencode["start"] == transcript_START]["end"])
@@ -327,7 +353,6 @@ def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, IR_thres
                 parsed.append(transcript +  ";Transcript_Exon"+ transcript_EXON +";No_Gencode_" + gencode["updated_exon_number"][gencode_index])
               
     return(parsed)
-
 
 
 def filter_parsed_transcript(gene, gencode, parsed, output_log):

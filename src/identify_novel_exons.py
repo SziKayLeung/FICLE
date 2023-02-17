@@ -68,7 +68,7 @@ def identify_novel_exon(df, gencode, All_FilteredParsed):
     return output_df, NE_coordinates
 
 
-def classify_novel_exon(gencode, df, NE):    
+def classify_novel_exon(gencode, order, df, NE):    
     
     '''
     Aim: Further classify location of novel exon as being beyond the first exon, internal or beyond the last exon
@@ -81,23 +81,22 @@ def classify_novel_exon(gencode, df, NE):
     1/ Find the coordinates of the novel exon associated to each transcript 
     2/ Compare the coordinates to the known coordinates for further classification
     '''
-    # Gencode start and end exons for determining location of novel exon
-    # order of gencode
-    gencode, order = determine_order(gencode)
-    gene_start = min(gencode["start"])
-    gene_end = max(gencode["end"])
-    print(order)
-    
+    # Gencode start and end exons for determining location of novel exon    
     if order == "antisense":
         df = df.sort_values("start", ascending=False)
-    
+        gene_start = max(gencode["start"])
+        gene_end = min(gencode["end"])
+    else:
+        gene_start = min(gencode["start"])
+        gene_end = max(gencode["end"])
+
     # empty dataframe and list
     output_df = pd.DataFrame()
     NExons_BeyondFirst = []
     NExons_BeyondFirstLast = []
     NExons_BeyondLast = []
     NExons_Internal = []
-      
+
     if len(NE) > 0:
         # Iterate through each transcript detected to have novel exon 
         # Subset the transcriptome with coordinates corresponding to that transcript
@@ -105,7 +104,7 @@ def classify_novel_exon(gencode, df, NE):
 
         # Beyond_First; Beyond_First_Last, Beyond_Last; Internal_NovelExon
         NovelExons_Subcategory = []
-        #NE = NE.loc[NE["transcript_id"] == "TALONT000583195"]
+        #NE = NE.loc[NE["transcript_id"] == "PB.37550.752"]
         for index,row in NE.iterrows():
             transcript = row["transcript_id"]
             # subset the transcriptome and reset index to find coordinates of novel exon
@@ -116,51 +115,48 @@ def classify_novel_exon(gencode, df, NE):
             novel_exon_start = subset.loc[int(novel_exon) -1,"start"]
             novel_exon_end = subset.loc[int(novel_exon) -1 ,"end"]
 
-            # Comparison of novel exon coordinates to known coordinates
-            #if order == "antisense":
-            #    novel_exon_start *= -1
-            #    gene_start *= -1
-            #    novel_exon_end *= -1
-            #    gene_end *= -1
-               
-            #print(novel_exon_start)
-            #print(gene_start)
-            
-            #print(novel_exon_end)
-            #print(gene_end)
-            
-            if novel_exon_end < gene_start:
-                NovelExons_Subcategory.append(transcript + ",Beyond_First")
-            elif novel_exon_start > gene_start and novel_exon_end < gene_end:
-                NovelExons_Subcategory.append(transcript + ",Internal_NovelExon")
-            elif novel_exon_start > gene_end:
-                NovelExons_Subcategory.append(transcript + ",Beyond_Last")
+            if order == "sense":
+                if novel_exon_end < gene_start:
+                    NovelExons_Subcategory.append(transcript + ",Beyond_First")
+                elif novel_exon_start > gene_start and novel_exon_end < gene_end:
+                    NovelExons_Subcategory.append(transcript + ",Internal_NovelExon")
+                elif novel_exon_start > gene_end:
+                    NovelExons_Subcategory.append(transcript + ",Beyond_Last")
+                else:
+                    print("Transcript not classified for Novel Exons:", transcript)
             else:
-                print("Transcript not classified for Novel Exons:", transcript)
+                if novel_exon_end > gene_start:
+                    NovelExons_Subcategory.append(transcript + ",Beyond_First")
+                elif novel_exon_start < gene_start and novel_exon_end > gene_end:
+                    NovelExons_Subcategory.append(transcript + ",Internal_NovelExon")
+                elif novel_exon_start < gene_end:
+                    NovelExons_Subcategory.append(transcript + ",Beyond_Last")            
+                else:
+                    print("Transcript not classified for Novel Exons:", transcript)
 
-        # Generate output table, of the number of exons that are beyond first, internal, beyond last for each transcript
-        output_df = generate_split_table(NovelExons_Subcategory,"novelexons")
-        output_df = output_df.groupby(['transcript_id','novelexons'])['Cat'].count().reset_index()
+            # Generate output table, of the number of exons that are beyond first, internal, beyond last for each transcript
+            output_df = generate_split_table(NovelExons_Subcategory,"novelexons")
+            output_df = output_df.groupby(['transcript_id','novelexons'])['Cat'].count().reset_index()
 
-        # Generate list of transcripts with those classifications:
-        # Prioritise Beyond_First Last, then Beyond First, Beyond  Last and Internal
-        for transcript in output_df["transcript_id"].unique():
-            novel_exon_types = list(output_df.loc[output_df["transcript_id"] == transcript,"novelexons"])
-            if "Beyond_First_Last" in novel_exon_types:
-                NExons_BeyondFirstLast.append(transcript)
-            elif "Beyond_First" in novel_exon_types:
-                NExons_BeyondFirst.append(transcript)
-            elif "Beyond_Last" in novel_exon_types: 
-                NExons_BeyondLast.append(transcript)
-            elif "Internal_NovelExon":
-                NExons_Internal.append(transcript)
-            else:
-                print("ERROR")
+            # Generate list of transcripts with those classifications:
+            # Prioritise Beyond_First Last, then Beyond First, Beyond  Last and Internal
+            for transcript in output_df["transcript_id"].unique():
+                novel_exon_types = list(output_df.loc[output_df["transcript_id"] == transcript,"novelexons"])
+                if "Beyond_First_Last" in novel_exon_types:
+                    NExons_BeyondFirstLast.append(transcript)
+                elif "Beyond_First" in novel_exon_types:
+                    NExons_BeyondFirst.append(transcript)
+                elif "Beyond_Last" in novel_exon_types: 
+                    NExons_BeyondLast.append(transcript)
+                elif "Internal_NovelExon":
+                    NExons_Internal.append(transcript)
+                else:
+                    print("ERROR")
 
-        # QC
-        len(NExons_Internal) + len(NExons_BeyondFirst) + len(NExons_BeyondLast) + len(NExons_BeyondFirstLast) == len(output_df["transcript_id"].unique())
+            # QC
+            len(NExons_Internal) + len(NExons_BeyondFirst) + len(NExons_BeyondLast) + len(NExons_BeyondFirstLast) == len(output_df["transcript_id"].unique())
 
-    return output_df, NExons_BeyondFirst, NExons_BeyondFirstLast, NExons_BeyondLast, NExons_Internal
+        return output_df, NExons_BeyondFirst, NExons_BeyondFirstLast, NExons_BeyondLast, NExons_Internal
         
 
 def novel_exon_stats(NE, NE_classify):
