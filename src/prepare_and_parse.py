@@ -14,12 +14,21 @@ sys.path.insert(1, srcPath)
 
   
 def determine_order(gencode):
-    # extract only the first transcript of interest for determining order
+    gencodeGroupExon = gencode.groupby(['exon_number', 'transcript_id']).size().to_frame(name = 'size').reset_index()
+    transcript = gencodeGroupExon[gencodeGroupExon['exon_number']==gencodeGroupExon['exon_number'].max()]["transcript_id"].values[0]
     dat = gencode.loc[gencode["transcript_id"] == gencode["transcript_id"][1]]
-    
-     # sort by start coordinates in order depending of if sense or antisense 
+
+    # sort by start coordinates in order depending of if sense or antisense 
     # note the exon_number are not in asending order from different transcripts
-    if dat["start"][1] < dat["start"][len(dat)-1]: # sense i.e. first coordinate is smaller than last coordinate
+    if len(dat) == 2:
+        if dat["start"][1] < dat["start"][2]:
+            gencode = gencode.sort_values("start", ascending=True)
+            order = "sense"
+        else:
+            gencode = gencode.rename({'start': 'end', 'end': 'start'}, axis=1) 
+            gencode = gencode.sort_values("start", ascending=False)
+            order = "antisense"
+    elif dat["start"][1] < dat["start"][len(dat)-1]: # sense i.e. first coordinate is smaller than last coordinate
         gencode = gencode.sort_values("start", ascending=True)
         order = "sense"
     elif dat["start"][1] > dat["start"][len(dat)-1]: # antisense
@@ -75,6 +84,7 @@ def parse_gencode_reference(gencode_gtf, gene):
     
     # drop duplicated exons with same start and exons to simplify the relabel
     gencode = gencode.drop_duplicates(subset=["start_end"], keep='first')
+    gencode = gencode.reset_index(drop=True)
 
     # relabel the exon_number so the exon_number goes in assending order if the current value is < previous value in the column
     prev_final = gencode.loc[1,'exon_number'] 
