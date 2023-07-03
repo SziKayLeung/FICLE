@@ -12,6 +12,7 @@ import os
 srcPath = os.path.dirname(os.path.realpath(__file__)) 
 sys.path.insert(1, srcPath)
 
+
 '''
 determine_order(gencode)
 parse_gencode_reference(gencode_gtf, gene)
@@ -25,24 +26,36 @@ generate_split_table(list2table,colname)
 reidentify_isoform_dataset(input_file)
 '''
 
+'''
+**** Scenario 
+sense ==> start|--exon1--|end--->---start|--exon2--|end
+start, end, exon_number, transcript_id, start_end
+10, 20, 1, X, 1020
+40, 53, 2, X, 4053
+
+antisense ==> start|--exon2--|end---<---start|--exon1--|end
+start, end, exon_number, transcript_id, start_end
+60, 50, 1, Y, 6050
+40, 32, 2, Y, 4032
+
+*** Application; use the start and end of one exon to determine order
+sense: 40 - 10 > 0 
+antisense: 40 - 60 < 0
+
+By ascending start, descending end:
+A |---exon 1----|end ---->---start|---exon 2----|  
+B |---exon 1----|end ---->---start|---exon 2----|
+C |-------------------exon 1--------------------|
+read:
+1. C exon 1
+2. A exon 1, B exon 1
+3. A exon 2, B exon 2
+therefore avoids downstream complications with parse_gencode_reference given matching ends
+A exon 1 and exon 2 would be assigned as different exons, despite exon 2 having a match end coordinate with C exon 1
+
+'''
 def determine_order(gencode, gene):
-    '''
-    **** Scenario 
-    sense ==> start|--exon1--|end--->---start|--exon2--|end
-    start, end, exon_number, transcript_id, start_end
-    10, 20, 1, X, 1020
-    40, 53, 2, X, 4053
-    
-    antisense ==> start|--exon2--|end---<---start|--exon1--|end
-    start, end, exon_number, transcript_id, start_end
-    60, 50, 1, Y, 6050
-    40, 32, 2, Y, 4032
-    
-    *** Application; use the start and end of one exon to determine order
-    sense: 40 - 10 > 0 
-    antisense: 40 - 60 < 0
-    
-    '''
+
     # take the first transcript as example
     dat = gencode.loc[gencode["transcript_id"] == gencode["transcript_id"][0]]
     
@@ -61,25 +74,58 @@ def determine_order(gencode, gene):
     return gencode, order 
 
 
+'''
+Aim: Parse Gencode reference gtf of target gene and filter on exon genes
+*Important* Check this for every target gene that the final coordinates and exon number make sense
+
+1/ Obtain all coordinates of known exons
+2/ Determine direction/order (sense or antisense)
+3/ Flatten gene structure by relabelling exon number based on the start and end coordinates of exons
+
+Scenario 1, 2, 3) Denoted the same exon with same start and/or end coordinates. 
+Scenario 4 also denoted the same exon, if within the start and end coordinates are within the reference exon 
+ref: ----exon------
+1:   ----exon------
+2:   ----exon--
+3:     --exon------
+4:     --exon--
+The reference exon refers to the exon before   
+
+#### Note 2:
+==> antisense
+situation 1:                                 outcome:
+A |end2___start2|-----<------|end1___start1| (exon 2, exon 1)
+B |end1______________________________start1| (exon 1)
+   
+situation 2:                                 outcome:
+A |end2___start2|-----<------|end1___start1| (exon2, exon 1)
+B |end1__________start1|                     (exon2)
+
+using current approach with dictionary:
+situation 1, all three exons are identified the same due to matching start and end coordinates 
+therefore to differentiate the two exons in A:
+if A_end2 = B_end1, and from dictionary A_end1 =/= B_end1 and A_start2 < A_end1, then update exon number (+1) 
+=/= indirectly equate 
+
+==> sense
+situation 1:                                 outcome:
+A |start1___end1|-----------|start2___end2|  (exon 1, exon 2)
+B |start1_____________________________end2|  (exon 1)
+to differentiate the two exons in A:
+if A_end2 = B_end2 and A_start2 > A_end1, then update exon number (+1) 
+
+   
+situation 2:                                 outcome:
+A |start1___end1|-----------|start2___end2|  (exon1, exon 2)
+                   B |start1__________end2|  (exon2)
+*prev_start = A_start1
+
+situation 2:                                 outcome:
+A |start1___end1|-----------|start2___end2|  (exon1, exon 2)
+B |start1__________end1|                     (exon1)
+
+'''
 def parse_gencode_reference(gencode_gtf, gene):
-    
-    '''
-    Aim: Parse Gencode reference gtf of target gene and filter on exon genes
-    *Important* Check this for every target gene that the final coordinates and exon number make sense
-    
-    1/ Obtain all coordinates of known exons
-    2/ Determine direction/order (sense or antisense)
-    3/ Flatten gene structure by relabelling exon number based on the start and end coordinates of exons
-    
-    Scenario 1, 2, 3) Denoted the same exon with same start and/or end coordinates. 
-    Scenario 4 also denoted the same exon, if within the start and end coordinates are within the reference exon 
-    ref: ----exon------
-    1:   ----exon------
-    2:   ----exon--
-    3:     --exon------
-    4:     --exon--
-    The reference exon refers to the exon before    
-    '''
   
     ## ----- Read and obtain coordinates
     print("**** Extracting gtf", file=sys.stdout)
@@ -140,43 +186,17 @@ def parse_gencode_reference(gencode_gtf, gene):
         # if the current value is the same as the previous value
         # if the start or the end coordinate is the same as before (but not situation 2) , keep the previous value 
         # otherwise update
-        '''
-        ==> antisense
-        situation 1:                                 outcome:
-        A |end2___start2|-----<------|end1___start1| (exon 2, exon 1)
-        B |end1______________________________start1| (exon 1)
-           
-        situation 2:                                 outcome:
-        A |end2___start2|-----<------|end1___start1| (exon2, exon 1)
-        B |end1__________start1|                     (exon2)
-        
-        subsequently, if ends (A_end2 = B_end1) the same 
-        but the start (B_start1) is bigger or equal than previous end (A_end1), then situation 1
-        but the start (B_start1) is smaller than previous start (A_end1), then situation 2
-        
-        ==> sense
-        situation 1:                                 outcome:
-        A |start1___end1|-----------|start2___end2|  (exon 1, exon 2)
-        B |start1_____________________________end2|  (exon 1)
-           
-        situation 2:                                 outcome:
-        A |start1___end1|-----------|start2___end2|  (exon1, exon 2)
-                           B |start1__________end2|  (exon2)
-        *prev_start = A_start1
-        
-        situation 2:                                 outcome:
-        A |start1___end1|-----------|start2___end2|  (exon1, exon 2)
-        B |start1__________end1|                     (exon1)
-        
-        '''
         
         # Check various conditions and update dictionaries accordingly
         found_start = next((v for k, v in start_dict.items() if k == start), None)
         found_end = next((v for k, v in end_dict.items() if k == end), None)
+        
+        # matching ends - other end coordinates from identical assigned exons
         matching_ends = [key for key, value in end_dict.items() if value == found_end]
 
         if found_start is not None:
             list_final.append(found_start)
+        # see NOTE 2, and note the "not any" i.e = FALSE
         elif found_end is not None and order == "antisense" and not any(start < x for x in matching_ends):
             list_final.append(found_end)
         elif found_end is not None and order == "sense" and not any(start > x for x in matching_ends):
@@ -194,14 +214,6 @@ def parse_gencode_reference(gencode_gtf, gene):
         
         start_dict[start] = prev_final
         end_dict[end] = prev_final
-    
-    start_counts = {}
-    end_counts = {}
-    for i in np.unique(list(end_dict.values())):
-        starts = sum(x == i for x in start_dict.values())
-        ends = sum(x == i for x in end_dict.values())
-        start_counts[i] = starts
-        end_counts[i] = ends  
 
     # given creating an empty list, the first entry can be exon 1 or exon 2 
     # exon 1 if the top two entries belong to exon 1, or exon 2 if the second entry belongs to exon 2
@@ -266,48 +278,47 @@ def parse_transcriptome_gtf(input_gtf, gene, classf, order):
     return(df)
 
    
+'''
+Aim: parse through each transcript to classify the splicing events based on coordinates
+: gencode = parsed gencode using the updated_exon_number column 
+: transcript = the transcript ID 
+: wobble = the maximum number of bp from the splice junction (SJ) to still be called as the same 
+: IR_threshold = the maximum number of bp from the SJ to be classified as intron retained 
+
+Output list: <transcript_id>; <transcript_exon>; <classification> <gencode_exon>
+
+1/ Filter through the transcriptome for the relevant transcript to extract exon coordinates, re-index to 1
+2/ Iterate through each exon of that transcript, capturing the start and end coordinates 
+3/ Iterate through each exon of the reference against that of the target transcript, comparing the start and end coordinates
+
+*** Exon Classification ***
+** Match **
+# Target exon coordinates exactly the same as the Gencode exon coordinates ==> "Match"
+# Target exon coordinates within wobble range of the Gencode exon coordinates ==> "Match"
+
+** Truncated **
+# Target start coordinates exact but Target end coordinates less than wobble range ==> "TruncatedA3"
+# Target end coordinates exact but Target start coordinates less than wobble range but more than IR range ==> "TruncatedA5"
+# Target start and exon coordinates less than the wobble range ==> "TruncatedBothA3A5"
+
+** Extended **
+# Target start coordintes exact, but end coordinates more than wobble range but less IR range ==> "ExtendedA3"
+# Target end coordinates exact, but start coordinates more than wobble range but less than IR range ==> "ExtendedA5"
+
+** Intron Retention **
+# Target start coordinates exact, but end coordinates more than IR range allowed ==> IR
+# Target end coordinates exact, but start coordinates more than IR range ==> IR
+# Start end coordinates exact, but end coordinates match other downstream gencode end ==> IRMatch
+
+** None **
+# No match of the start or end coordinates to the reference gencode exon
+'''
 def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, IR_threshold, order):
 
-    '''
-    Aim: parse through each transcript to classify the splicing events based on coordinates
-    : gencode = parsed gencode using the updated_exon_number column 
-    : transcript = the transcript ID 
-    : wobble = the maximum number of bp from the splice junction (SJ) to still be called as the same 
-    : IR_threshold = the maximum number of bp from the SJ to be classified as intron retained 
-    
-    Output list: <transcript_id>; <transcript_exon>; <classification> <gencode_exon>
-    
-    1/ Filter through the transcriptome for the relevant transcript to extract exon coordinates, re-index to 1
-    2/ Iterate through each exon of that transcript, capturing the start and end coordinates 
-    3/ Iterate through each exon of the reference against that of the target transcript, comparing the start and end coordinates
-    
-    *** Exon Classification ***
-    ** Match **
-    # Target exon coordinates exactly the same as the Gencode exon coordinates ==> "Match"
-    # Target exon coordinates within wobble range of the Gencode exon coordinates ==> "Match"
-    
-    ** Truncated **
-    # Target start coordinates exact but Target end coordinates less than wobble range ==> "TruncatedA3"
-    # Target end coordinates exact but Target start coordinates less than wobble range but more than IR range ==> "TruncatedA5"
-    # Target start and exon coordinates less than the wobble range ==> "TruncatedBothA3A5"
-    
-    ** Extended **
-    # Target start coordintes exact, but end coordinates more than wobble range but less IR range ==> "ExtendedA3"
-    # Target end coordinates exact, but start coordinates more than wobble range but less than IR range ==> "ExtendedA5"
-    
-    ** Intron Retention **
-    # Target start coordinates exact, but end coordinates more than IR range allowed ==> IR
-    # Target end coordinates exact, but start coordinates more than IR range ==> IR
-    # Start end coordinates exact, but end coordinates match other downstream gencode end ==> IRMatch
-    
-    ** None **
-    # No match of the start or end coordinates to the reference gencode exon
-    '''
-    
     # info to extract from the gencode reference 
-    list_gencode_ends = gencode[["end"]]
     max_exon = max([int(i) for i in gencode['updated_exon_number']])
     gencode['updated_exon_number'] = gencode['updated_exon_number'].astype(str)
+    list_gencode_ends = gencode["end"]
     
     # Filter 
     parsed = []
@@ -476,35 +487,35 @@ def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, IR_thres
     return(finalised)
 
 
+ 
+'''
+Aim: Filter the parsed output to prioritise the output 
+Note: due to multiple reference transcripts with same or similar exons, 
+the parse function generates redundant classifications
+i.e one target exon can be complete match to one reference exon but truncated/extended to another reference exon
+:gencode: parsed output gencode gtf from parse_gencode_reference()
+:parsed: output from parse_transcript()
+
+
+On the parsed output i.e. for each transcript, prioritise ranking for
+- each gencode exon 
+- each transcript exon
+
+*** Rank Priorities ***
+1. Exact match for that gencode exon
+2. IR Match; start coordinates most important and so overrides Extension & Truncation
+3. Extension > Truncation (like with exon 1), as longer transcript/exon is representative
+3. Extension/Truncation > TruncatedBothA3A5, as at least one splice site match 
+4. Extension/Truncation > IR, as smaller threshold (10bp) than IR threshold (100bp), 
+    suggesting that there are other exons from other transcripts that are more similar to exon of interest
+5. IR > TruncatedbothA3A5, as IR means one matching splice site, even if extend beyond 10bp for other splice site
+    
+Note: each gencode exon stored in the reference is in the parsed file, even if no classifications recorded for it
+therefore no need to know the number of gencode exons beforehand
+
+'''
 def filter_parsed_transcript(gencode, parsed, output_log):
-    
-    '''
-    Aim: Filter the parsed output to prioritise the output 
-    Note: due to multiple reference transcripts with same or similar exons, 
-    the parse function generates redundant classifications
-    i.e one target exon can be complete match to one reference exon but truncated/extended to another reference exon
-    :gencode: parsed output gencode gtf from parse_gencode_reference()
-    :parsed: output from parse_transcript()
-
-    
-    On the parsed output i.e. for each transcript, prioritise ranking for
-    - each gencode exon 
-    - each transcript exon
-    
-    *** Rank Priorities ***
-    1. Exact match for that gencode exon
-    2. IR Match; start coordinates most important and so overrides Extension & Truncation
-    3. Extension > Truncation (like with exon 1), as longer transcript/exon is representative
-    3. Extension/Truncation > TruncatedBothA3A5, as at least one splice site match 
-    4. Extension/Truncation > IR, as smaller threshold (10bp) than IR threshold (100bp), 
-        suggesting that there are other exons from other transcripts that are more similar to exon of interest
-    5. IR > TruncatedbothA3A5, as IR means one matching splice site, even if extend beyond 10bp for other splice site
-        
-    Note: each gencode exon stored in the reference is in the parsed file, even if no classifications recorded for it
-    therefore no need to know the number of gencode exons beforehand
-
-    '''
-
+  
     def filterRank(df,col):
         retain = []
         rank = ["Match","IRMatch","ExtendedA3","ExtendedA5","TruncatedA3","TruncatedA5","IR","TruncatedBothA3A5","No"]
@@ -549,20 +560,18 @@ def filter_parsed_transcript(gencode, parsed, output_log):
         output_log.write(element + "\n")
     
     return(ExonParsed["Original"])
-    #return(ExonParsed)
 
 
+'''
+Aim: Quickly filter output from filter_parsed_transcript() using the transcript ID
+# Used in multiple functions downstream
+:transcript = transcript ID
+
+Output: 
+:class_transcript_exon = list of transcript exons classified 
+:class_gencode_exon = list of corresponding gencode exons classified with the classification types
+'''
 def class_by_transcript(transcript, All_FilteredParsed):
-    
-    '''
-    Aim: Quickly filter output from filter_parsed_transcript() using the transcript ID
-    # Used in multiple functions downstream
-    :transcript = transcript ID
-    
-    Output: 
-    :class_transcript_exon = list of transcript exons classified 
-    :class_gencode_exon = list of corresponding gencode exons classified with the classification types
-    '''
     
     # AFP = All_FilteredParsed Tuple
     # Create a tuple for filtering from the big list using the first element as transcript id and second element as class
@@ -605,17 +614,16 @@ def generate_split_table(list2table,colname):
     return(df)
 
 
+'''
+#### Function only applicable for merged datasets ###
+Aim: Define from the isoforms of a merged dataset (i.e. PacBio and ONT) from the respective dataset
+params:
+    input_file = dataframe contains an "isoform" column with the PacBio and ONT isoforms merged 
+    ** Important **: PacBio ID always before ONT ID if isoform present in both datasets, separated by "_"
+
+Output: Appends two additional columns (dataset, and ONT isoforms)
+'''
 def reidentify_isoform_dataset(input_file):
-    
-    '''
-    #### Function only applicable for merged datasets ###
-    Aim: Define from the isoforms of a merged dataset (i.e. PacBio and ONT) from the respective dataset
-    params:
-        input_file = dataframe contains an "isoform" column with the PacBio and ONT isoforms merged 
-        ** Important **: PacBio ID always before ONT ID if isoform present in both datasets, separated by "_"
-    
-    Output: Appends two additional columns (dataset, and ONT isoforms)
-    '''
 
     dataset = []
     ont_isoforms = []
