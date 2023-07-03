@@ -18,7 +18,7 @@ determine_order(gencode)
 parse_gencode_reference(gencode_gtf, gene)
 replace_geneid(df, classf)
 parse_transcriptome_gtf(input_gtf, gene, classf)
-parse_transcript(gencode, parsed_transcriptome, transcript, wobble, IR_threshold, order)
+parse_transcript(gencode, parsed_transcriptome, transcript, wobble, order)
 filter_parsed_transcript(gene, gencode, parsed, output_log)
 class_by_transcript_pd(transcript, All_FilteredParsed)
 class_by_transcript(transcript, All_FilteredParsed)
@@ -196,24 +196,33 @@ def parse_gencode_reference(gencode_gtf, gene):
 
         if found_start is not None:
             list_final.append(found_start)
+            start_dict[start] = found_start
+            end_dict[end] = found_start
         # see NOTE 2, and note the "not any" i.e = FALSE
         elif found_end is not None and order == "antisense" and not any(start < x for x in matching_ends):
             list_final.append(found_end)
+            start_dict[start] = found_end
+            end_dict[end] = found_end
         elif found_end is not None and order == "sense" and not any(start > x for x in matching_ends):
             list_final.append(found_end)
+            start_dict[start] = found_end
+            end_dict[end] = found_end
         elif start == prev_start:
             list_final.append(prev_final)
+            start_dict[start] = prev_final
+            end_dict[end] = prev_final
         elif end == prev_end:
             list_final.append(prev_final)
+            start_dict[start] = prev_final
+            end_dict[end] = prev_final
         else:
             prev_final = int(prev_final) + 1
             list_final.append(prev_final)
+            start_dict[start] = prev_final
+            end_dict[end] = prev_final
 
         prev_start = start
         prev_end = end
-        
-        start_dict[start] = prev_final
-        end_dict[end] = prev_final
 
     # given creating an empty list, the first entry can be exon 1 or exon 2 
     # exon 1 if the top two entries belong to exon 1, or exon 2 if the second entry belongs to exon 2
@@ -283,7 +292,6 @@ Aim: parse through each transcript to classify the splicing events based on coor
 : gencode = parsed gencode using the updated_exon_number column 
 : transcript = the transcript ID 
 : wobble = the maximum number of bp from the splice junction (SJ) to still be called as the same 
-: IR_threshold = the maximum number of bp from the SJ to be classified as intron retained 
 
 Output list: <transcript_id>; <transcript_exon>; <classification> <gencode_exon>
 
@@ -298,22 +306,20 @@ Output list: <transcript_id>; <transcript_exon>; <classification> <gencode_exon>
 
 ** Truncated **
 # Target start coordinates exact but Target end coordinates less than wobble range ==> "TruncatedA3"
-# Target end coordinates exact but Target start coordinates less than wobble range but more than IR range ==> "TruncatedA5"
+# Target end coordinates exact but Target start coordinates less than wobble range ==> "TruncatedA5"
 # Target start and exon coordinates less than the wobble range ==> "TruncatedBothA3A5"
 
 ** Extended **
-# Target start coordintes exact, but end coordinates more than wobble range but less IR range ==> "ExtendedA3"
-# Target end coordinates exact, but start coordinates more than wobble range but less than IR range ==> "ExtendedA5"
+# Target start coordintes exact, but end coordinates more than wobble range ==> "ExtendedA3"
+# Target end coordinates exact, but start coordinates more than wobble range ==> "ExtendedA5"
 
 ** Intron Retention **
-# Target start coordinates exact, but end coordinates more than IR range allowed ==> IR
-# Target end coordinates exact, but start coordinates more than IR range ==> IR
 # Start end coordinates exact, but end coordinates match other downstream gencode end ==> IRMatch
 
 ** None **
 # No match of the start or end coordinates to the reference gencode exon
 '''
-def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, IR_threshold, order):
+def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, order):
 
     # info to extract from the gencode reference 
     max_exon = max([int(i) for i in gencode['updated_exon_number']])
@@ -351,6 +357,7 @@ def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, IR_thres
             paired_ends = list(gencode[gencode["start"] == tranStart]["end"])
             # Identify the remaining gencode end sites for further intron retention classification
             other_gencode_ends = list(set(list_gencode_ends) - set(paired_ends))
+            if tranEnd in other_gencode_ends: other_gencode_ends.remove(tranEnd)
             
             appText = str(tranID + ";Transcript_Exon"+ tranExon)
             noText = tranID + ";Transcript_Exon"+ tranExon +";No_Gencode_" + gencode["updated_exon_number"][gencode_index] + ";0"
@@ -382,39 +389,29 @@ def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, IR_thres
                               A5-------->---A3          Truncated A5
                         A5---<----A3                    Truncated A3
                         A5---<----A3                    TruncatedBothA3A5
-                    A5------>---------------A3          ExtendedBothA3A5
-                        A5-->-------------------A3      IR
-              A5------------>-----------A3              IR          
+                    A5------>---------------A3          ExtendedBothA3A5       
                 '''
                 # Start coordinates the same, but transcript end shorter than gencode end ==> TruncatdA3
-                # but not as far as the gencode end with the IR threshold
                 if (genStart - wobble <= tranStart <= genStart + wobble):
-                    #diff = str(abs(genEnd - tranEnd))
                     if (tranEnd <= genEnd - wobble):
                         parsed.append(appText +";TruncatedA3_Gencode_" + genExon + ";" + diff)
-                    elif (genEnd + wobble <= tranEnd <= genEnd + IR_threshold):
+                    elif (tranEnd > genEnd + wobble):
                         parsed.append(appText +";ExtendedA3_Gencode_" + genExon + ";" + diff)
-                    elif (tranEnd >= genEnd + IR_threshold):
-                         parsed.append(appText +";IR_Gencode_" + genExon + ";" + diff + ";A3")
                     else:
                         parsed.append(noText)
                 
                 elif (genEnd - wobble <= tranEnd <= genEnd + wobble):
-                    #diff = str(abs(genStart - tranStart))
                     if (tranStart >= genStart + wobble):
                         parsed.append(appText +";TruncatedA5_Gencode_" + genExon + ";" + diff)
-                    elif (genStart - IR_threshold <= tranStart <= genStart - wobble): 
+                    elif (tranStart < genStart - wobble): 
                         parsed.append(appText +";ExtendedA5_Gencode_" + genExon + ";" + diff)
-                    elif (tranStart <= genStart - IR_threshold):
-                        parsed.append(appText +";IR_Gencode_" + genExon + ";" + diff + ";A5")                        
                     else:
                         parsed.append(noText)
                 
-                elif (genStart <= tranEnd <= genEnd - wobble and genEnd >= tranStart > genStart - wobble):
+                elif (genStart < tranEnd < genEnd - wobble and genEnd > tranStart > genStart - wobble):
                     parsed.append(appText +";TruncatedBothA3A5_Gencode_" + genExon + ";" + diff)
 
-                elif (genEnd + wobble <= tranEnd <= genEnd + IR_threshold and 
-                genStart - IR_threshold <= tranStart <= genStart - wobble):
+                elif (genEnd + wobble < tranEnd and tranStart < genStart - wobble):
                     parsed.append(appText +";ExtendedBothA3A5_Gencode_" + genExon + ";" + diff)             
                                    
                 else: # No classification to the reference gencode exon
@@ -432,45 +429,29 @@ def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, IR_thres
                            A3---<-------A5              Truncated A3
                     A3---<------------------A5          ExtendedBothA3A5
                            A3---<---A5                  TruncatedBothA3A5
-                           A3---<-------------------A5  IR
-                A3--------------<-------A5              IR
                 '''
                 # A3 same
                 if (genEnd - wobble <= tranEnd <= genEnd + wobble):
-                    #diff = str(abs(genStart - tranStart))
-                    if (genStart + IR_threshold >= tranStart >= genStart + wobble):
-                        parsed.append(appText +";ExtendedA5_Gencode_" + genExon + ";" + diff) 
-                    
+                    if (tranStart >= genStart + wobble):
+                        parsed.append(appText +";ExtendedA5_Gencode_" + genExon + ";" + diff)                     
                     elif (tranStart <= genStart - wobble):    
-                        parsed.append(appText +";TruncatedA5_Gencode_" + genExon + ";" + diff) 
-                    
-                    elif (tranStart >= genStart + wobble):  
-                        parsed.append(appText +";IR_Gencode_" + genExon + ";" + diff + ";A5") 
-                    
+                        parsed.append(appText +";TruncatedA5_Gencode_" + genExon + ";" + diff)                                         
                     else:
                          parsed.append(noText)
                     
                 elif (genStart - wobble <= tranStart <= genStart + wobble):
-                    #diff = str(abs(genEnd - tranEnd))
-                    if (genEnd - IR_threshold <= tranEnd <= genEnd - wobble):
+                    if (tranEnd <= genEnd - wobble):
                         parsed.append(appText +";ExtendedA3_Gencode_" + genExon + ";" + diff)
-                             
                     elif (tranEnd >= genEnd + wobble):
                         parsed.append(appText +";TruncatedA3_Gencode_" + genExon + ";" + diff)
-                
-                    elif (tranEnd <= genEnd - IR_threshold):
-                        parsed.append(appText +";IR_Gencode_" + genExon + ";" + diff + ";A3")
-                     
                     else:
                          parsed.append(noText)
                 
-                elif (genStart >= tranEnd >= genEnd + wobble and genEnd <= tranStart > genStart - wobble):
+                elif (genStart > tranEnd > genEnd + wobble and genEnd < tranStart > genStart - wobble):
                     parsed.append(appText +";TruncatedBothA3A5_Gencode_" + genExon + ";" + diff)
-
-                elif (genEnd - wobble >= tranEnd >= genEnd - IR_threshold and
-                      genStart + IR_threshold >= tranStart >= genStart + wobble):
-                    parsed.append(appText +";ExtendedBothA3A5_Gencode_" + genExon + ";" + diff)             
-
+                    
+                elif (genEnd - wobble > tranEnd > genEnd and genStart > tranStart > genStart + wobble):
+                    parsed.append(appText +";ExtendedBothA3A5_Gencode_" + genExon + ";" + diff)
                     
                 else: # No classification to the reference gencode exon
                     parsed.append(noText)
@@ -505,10 +486,7 @@ On the parsed output i.e. for each transcript, prioritise ranking for
 1. Exact match for that gencode exon
 2. IR Match; start coordinates most important and so overrides Extension & Truncation
 3. Extension > Truncation (like with exon 1), as longer transcript/exon is representative
-3. Extension/Truncation > TruncatedBothA3A5, as at least one splice site match 
-4. Extension/Truncation > IR, as smaller threshold (10bp) than IR threshold (100bp), 
-    suggesting that there are other exons from other transcripts that are more similar to exon of interest
-5. IR > TruncatedbothA3A5, as IR means one matching splice site, even if extend beyond 10bp for other splice site
+4. Extension/Truncation > TruncatedBothA3A5, as at least one splice site match 
     
 Note: each gencode exon stored in the reference is in the parsed file, even if no classifications recorded for it
 therefore no need to know the number of gencode exons beforehand
@@ -518,7 +496,7 @@ def filter_parsed_transcript(gencode, parsed, output_log):
   
     def filterRank(df,col):
         retain = []
-        rank = ["Match","IRMatch","ExtendedA3","ExtendedA5","TruncatedA3","TruncatedA5","IR","TruncatedBothA3A5","No"]
+        rank = ["Match","IRMatch","ExtendedA3","ExtendedA5","TruncatedA3","TruncatedA5","TruncatedBothA3A5","No"]
         
         for i in df[col].unique():
             subset = df[(df[col]==i)]

@@ -72,7 +72,7 @@ def annotate_gene(args):
         All_FilteredParsed = []
         for count, transcript in enumerate(df['transcript_id'].unique()):
             #print(transcript)
-            parsed = prep.parse_transcript(gencode,df,transcript,10, 100, order)
+            parsed = prep.parse_transcript(gencode,df,transcript,10, order)
             All_FilteredParsed.append(prep.filter_parsed_transcript(gencode,parsed, output_log))
             if count%50==0:
                 print("Parsing through transcript", count)
