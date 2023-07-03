@@ -6,106 +6,68 @@ import numpy as np
 from collections import Counter
 import sys
 
+from prepare_and_parse import class_by_transcript_pd
 from prepare_and_parse import class_by_transcript
 from prepare_and_parse import generate_split_table
 from prepare_and_parse import determine_order
 
 def tabulate_exon_presence(gencode, df, All_FilteredParsed):
     df_transcript_id = df['transcript_id'].unique()
-    
+
     '''
     Aim: On the parsed output i.e. for each transcript,
     1/ Iterate through each known gencode exon to identify if there is a transcript exon classified to it i.e not "No"
     2/ if there is a classification, ensure that it matches any of the labels except for intron retention
     :gencode = read gencode gtf
-    
+
     Output: Table of all transcripts as rows and gencode exons as columns 
     1 = Gencode exon is present 
     0 = Gencode exon not present
     2 = Genocode exon is present as IR 
     1001 = Gencode exon is not registered*
-    
+
     *Transcript is matching a reference transcript with fewer exons than other reference transcripts
     No need to address order (sense/antisense) as coordinates and exon naming 
     for gencode is addressed in determine_order() and parse_gencode_reference()
     for transcript df in parse_transcript()
     '''
-    
+
     max_exon = max([int(i) for i in gencode["updated_exon_number"]])
-    
+
     # All labels except IR
-    Labels = ["AF", "MisMatch", "MisjumpMatch", "Match", "ExtendedA5","ExtendedA3", "TruncatedA5","TruncatedBothA3A5", "TruncatedA3","ExtendedBothA3A5"]
+    Labels = ["AF", "MisMatch", "MisjumpMatch", "Match", "ExtendedA5","ExtendedA3", "TruncatedA5","TruncatedBothA3A5",
+              "TruncatedA3","ExtendedBothA3A5"]
     Gencode_exons = ["Gencode_" + str(i) for i in range(1,max_exon+1)] 
-    #print(Gencode_exons)
-    
+
     # Output as table 
     df2 = pd.DataFrame(columns = Gencode_exons)
     data = []
-    
-    # Iterate through each transcript
-    #for transcript in ["PB.4515.1"]:
-    for transcript in df_transcript_id:        
-        class_transcript_exon,class_gencode_exon = class_by_transcript(transcript, All_FilteredParsed)
-        
-        # Create a tuple for exact downstream filtering: (Class, Gencode exon)
-        Gencode_tuple = [(i.split("_",1)[0], i.split("_",1)[1]) for i in class_gencode_exon]
-        #print(class_gencode_exon)
-        
-        # last exon to capture transcript truncation and mistake as exon skipping 
-        dat = pd.DataFrame(class_gencode_exon,class_transcript_exon)
-        dat["Transcript"] = [int(i.replace("Transcript_Exon"," ")) for i in dat.index.values]
-        dat["Class"] = [i.split("_",3)[0] for i in dat[0]]
-        dat["Gencode"] = [i.split("_",1)[1] for i in dat[0]]
-        #print(dat)
-        
-        maxdat = dat[dat['Transcript']==dat['Transcript'].max()]
-        mindat = dat[dat['Transcript']==dat['Transcript'].min()]
-        #print(maxdat)
-        if df["gene_id"].values[0] != "Tardbp":
-            if not ((len(np.unique(maxdat.Class)) == 1) and (np.unique(maxdat.Class)[0] in ["No","IRMatch","IR","MisjumpMatch"])):
-                if len(maxdat) > 2:
-                    print("Error! More than one classification for Transcript exon")
-                    print(transcript)
-                    print(maxdat)
-                    sys.exit()
 
-        if "No" in list(maxdat["Class"]):
-            print("Final Exon is a novel exon") 
-            
-        maxgencodexon = list(maxdat["Gencode"])[0] 
-        mingencodexon = list(mindat["Gencode"])[0]
-        #print(maxgencodexon)
-        #print(mingencodexon)
-        
-        #print(maxdat)
+    # Iterate through each transcript
+    for transcript in df_transcript_id:     
+
+        tdat = class_by_transcript_pd(transcript, All_FilteredParsed)
+        maxgencodexon = max(tdat["GencodeExon"])
+
         # Iterate through each gencode exon
         output = []
-        for g in Gencode_exons:
+        for g in range(1,max_exon+1):
             # filter the classifcation for each corresponding gencode exon
-            Gencode_filter = [ele[0] for ele in Gencode_tuple if ele[1] == g]
-               
-            #print(int(g.split("_",2)[1]))
-            #print(int(maxgencodexon.split("_",1)[1]))
-            if int(g.split("_",2)[1]) > int(maxgencodexon.split("_",1)[1]):
-                output.append(1001)
+            Gencode_filter = tdat.loc[tdat['GencodeExon'] == g,'Class'].values
 
-            # if the number of classification for that gencode exon has other classifications beside "NO"
-            # note: from filtering parsed output, all other classifications prioritised over "no"
-            # therefore list would not contain both "no" and other classifications as the "no" classifications are previously filtered
-            #if len(Gencode_filter) == 0:
-            #    output.append(1001) ## 1001 = Absent, not detected
+            if g > max_exon:
+                output.append(1001)
             elif len(list(filter(lambda x: "No" not in x, Gencode_filter))) != 0:
-                Gencode_split = [i.split("_",3)[0] for i in Gencode_filter]      
-                #print(Gencode_split)
-                if "IR" in Gencode_split or "IRMatch" in Gencode_split:
+                if "IR" in Gencode_filter or "IRMatch" in Gencode_filter:
                     output.append(2) ## IR
-                elif any(elem in Labels for elem in Gencode_split):
+                elif any(elem in Labels for elem in Gencode_filter):
                     output.append(1) ## 1 = Present
                 else:
                     print("ERROR:", transcript)
+                    sys.exit()
             else:
                 output.append(0) # only No classifications                 
-                
+
         # Create a dictionary of the output to append to the table
         zipped = zip(list(df2), output)
         a_dictionary = dict(zipped)
@@ -113,10 +75,7 @@ def tabulate_exon_presence(gencode, df, All_FilteredParsed):
 
     df2 = df2.append(data, True)
     df2.index = df_transcript_id    
-    
-    # sum across the columns
-    #df.loc['Total',:]= df.sum(axis=0)
-    
+
     ## Stats 
     # Count of the number of transcripts with number of exons (i.e 100 transcripts with 5 exons, 41 with 4 exons)
     num_exons_pertrans = (df2 == 1).astype(int).sum(axis=1)
@@ -582,17 +541,7 @@ def output_exon_skipping_stats(ES):
 
     except:
         print("No transcripts with exon skipping")
-    
-    # Further ordering of Transcripts Skipped by the order of the first exon skipped for visualisation
-    #Internal_exons = Gencode_exons[1:-1] 
-    #output = []
-    ## group ES by the first exon skipped
-    #for transcript in ES_df["transcript_id"]:
-    #    dat = ES_df.loc[ES_df["transcript_id"] == transcript,"ES"].to_list()
-    #    dat = (transcript, min([i.split("_",2)[1] for i in dat]))
-    #    output.append(dat)
-    #output.sort(key=lambda x:x[1])
-    #ES_Transcripts = [ele[0] for ele in output]
+  
     
     return ES_Count, ES_SpecificExonSkipped, ES_Transcripts
     
