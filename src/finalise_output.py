@@ -15,7 +15,6 @@ def generate_aggregated_classification(df, categories):
     1/ Create empty array and populate if the transcript is recorded within the event lists
     '''
     
-      
     # Create empty matrix
     matrix = np.zeros((len(df['transcript_id'].unique()),len(categories)), dtype=int)
     
@@ -28,8 +27,7 @@ def generate_aggregated_classification(df, categories):
 
 
     Transcript_Classifications = pd.DataFrame(matrix)
-    Transcript_Classifications.columns = ["Matching","MisandJumpMatch","MisMatch","MisjumpMatch", 
-                                          "AllExons_A5A3","AllExons_MisMatch_A5A3","SomeMatch","MisjumpMatch_NotAll",
+    Transcript_Classifications.columns = ["Matching","SomeMatch",
                                           "A5A3","AF","AP","AT","ES","IR","IR_Exon1Only", "IR_LastExonOnly",
                                           "NE_1st","NE_Int","NE_Last","NE_FirstLast"]
     Transcript_Classifications.index = df['transcript_id'].unique()
@@ -63,16 +61,8 @@ def prioritise_write_output(df, Transcript_Classifications, output_dir, gene, in
         row = Transcript_Classifications.loc[transcript]
         if row["NE_All"] != 0 and row["Matching"] == 1:
             Output.append(transcript + "," + "NEMatching")
-        elif row["MisandJumpMatch"] == 1:
-            Output.append(transcript + "," + "MisandJumpMatch")
-        elif row["MisjumpMatch"] == 1:
-            Output.append(transcript + "," + "MisjumpMatch")
-        elif row["MisMatch"] == 1:
-            Output.append(transcript + "," + "MisMatch")
         elif row["Matching"] == 1:
             Output.append(transcript + "," + "Matching")
-        elif row["AllExons_MisMatch_A5A3"] == 1:
-            Output.append(transcript + "," + "AllExons_MisMatch_A5A3")
         elif row["NE_1st"] ==1:
             Output.append(transcript + "," + "NE_First")
         elif row["NE_Last"] == 1:
@@ -88,28 +78,24 @@ def prioritise_write_output(df, Transcript_Classifications, output_dir, gene, in
         elif row["IR"] == 1 and row["ES"] == 1 and row["NE_Int"] == 1 and row["AP"] == 0 and row["AT"] == 0:
             Output.append(transcript + "," + "IR_ES_NEInt") 
         elif row["IR"] == 1 and row["ES"] == 1:
-            Output.append(transcript + "," + "IR_ES")
+            Output.append(transcript + "," + "IR_ES_Both")
         elif row["ES"] == 1 and row["NE_Int"] == 1 and row["AP"] == 0 and row["AT"] == 0:
-            Output.append(transcript + "," + "ES_NeInt")
+            Output.append(transcript + "," + "ES_NeInt_Both")
         elif row["NE_Int"] ==1 and row["AP"] == 0 or row["NE_Int"] ==1 and row["AT"] == 0: 
             # prioritise internal novel exons rather than novel exons from alternative promoter or termination
-            Output.append(transcript + "," + "NE_Int")
+            Output.append(transcript + "," + "NEIntOnly")
         elif row["IR"] == 1:
-            Output.append(transcript + "," + "IR")
+            Output.append(transcript + "," + "IROnly")
         elif row["ES"] == 1:
-            Output.append(transcript + "," + "ES")
+            Output.append(transcript + "," + "ESOnly")
         elif row["SomeMatch"] == 1 and row["AP"] == 0 or row["SomeMatch"] == 1 and row["AT"] == 0:
             Output.append(transcript + "," + "SomeMatch")
-        elif row["MisjumpMatch_NotAll"] == 1:
-            Output.append(transcript + "," + "MisjumpMatch_NotAll")
         elif row["AP"] == 1:
-            Output.append(transcript + "," + "AP")
+            Output.append(transcript + "," + "APOnly")
         elif row["AT"] == 1:
             Output.append(transcript + "," + "AT")
         elif row["AF"] == 1:
             Output.append(transcript + "," + "AF")
-        elif row["AllExons_A5A3"] == 1:
-            Output.append(transcript + "," + "AllExons_A5A3")
         elif row["A5A3"] == 1:
             Output.append(transcript + "," + "A5A3")
         else:
