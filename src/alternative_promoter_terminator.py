@@ -2,72 +2,47 @@
 # alternative promoter and alternative terminator
 
 import pandas as pd
-from prepare_and_parse import manual_gencode
 from prepare_and_parse import class_by_transcript_pd
 
-def identify_alternative_promoter(df, ES,gene, gencode, gencode_gtf, All_FilteredParsed):
-    '''
-    Aim: Identify alternative promoter based on the Exon Skipping table generated as the first exon identified
-    :ES = Exon skipped table output from identify_exon_skipping() which also records position of first exon
-    Note: Not alternative first exon which is subtle difference of the first exon
-    '''
-    output = []
-    alt_clu = []
-    for index,row in ES.iterrows():
-        # if the first exon is not under Gencode Exon 1, then transcript characterised with alternative first exon
-        if row["Gencode_1"] != "FirstExon" and row["Gencode_1"] != "IR":
-            output.append(index)
-    
+def identify_alternative_promoter(df, gencode, All_FilteredParsed):
     '''
     Transcripts with first exons that match first exons of shorter reference downstream are not also not considered AP 
-    Exceptions
-    Cd33 - Reference transcripts have first exon at "gencode 3" thus corresponding transcripts are not considered AP
     '''
-    # list of coordinates and cooresponding exons of transcripts (not flattened)
-    manualgencode_output = manual_gencode(gencode_gtf)
-    Not_AP = []
+    AP = []
+
+    # Tabulate the corresponding exon in reference flattened structure of known first exons across all transcripts
+    alt_1_exon = set(gencode.loc[gencode["altPromoters"],"updated_exon_number"].values)
+
     for transcript in df["transcript_id"].unique():
-        # Record the corresonding gencode exon for the Transcript Exon 1
+        # Record the corresponding gencode exon for the Transcript Exon 1
+        #print(transcript)
         dat = class_by_transcript_pd(transcript, All_FilteredParsed)
-        trans_exon1 = [i.replace("Gencode_", "") for i in dat.loc[(dat["TranscriptExon"] == "Exon1") & (dat["Class"] != "No") ,"GencodeExon"].values]
-        #print(trans_exon1)
-        # Tabulate the corresponding exon in reference flattened structure of known first exons across all transcripts
-        alt_1 = manualgencode_output[manualgencode_output["original_exon_number"] == 1]
-        alt_1_exon = list(gencode.loc[(gencode["start"].isin(alt_1["start"].values)) & 
-                         (gencode["end"].isin(alt_1["end"].values)),"updated_exon_number"].unique())
-        #print(alt_1_exon)
+        trans_exon1 = dat.loc[(dat["TranscriptExon"] == "Exon1") & (dat["Class"] != "No"),]
+        # should only be 1 classification, unless there is in IR matched across
+        if "IR" not in trans_exon1["Class"].values and "IRMatch" not in trans_exon1["Class"].values: assert len(trans_exon1) <= 1
 
-        if set(trans_exon1).intersection(alt_1_exon): # if common values, then not AP
-            Not_AP.append(transcript)
-
-    if gene == "Cd33":
-        if row["Gencode_3"] == "FirstExon": 
-            alt_clu.append(index)  
-    if gene == "Cd33": output = [x for x in output if x not in alt_clu]
+        if len(trans_exon1) == 1:
+            if str(trans_exon1["GencodeExon"].values[0]) in alt_1_exon: # if common values, then not AP
+                AP.append(transcript)
+        elif "IR" in trans_exon1["Class"].values:
+            if str(min(trans_exon1["GencodeExon"].values)) in alt_1_exon:
+                AP.append(transcript)
+        else: # exon 1 not present
+            AP.append(transcript)
     
-    output = [x for x in output if x not in Not_AP]
-    
-    return(output)
+    return AP
     
     
 def identify_alternative_termination(df, gencode, All_FilteredParsed):
     
-    alt_lastexon = []
-    for t in list(set(list(gencode["transcript_id"].values))):
-        alt_lastexon.append(max(list(pd.to_numeric(gencode.loc[gencode["transcript_id"] == t,"updated_exon_number"]))))
-        
-    alt_lastexon = [str(i) for i in alt_lastexon]
+    alt_last_exon = set(gencode.loc[gencode["altTerminators"],"updated_exon_number"].values)
 
-    output = []
-    #for transcript in ["PB.8560.365_TALONT001405949"]:
+    AT = []
     for transcript in df["transcript_id"].unique(): 
         dat = class_by_transcript_pd(transcript, All_FilteredParsed)
-        gencode_maxexon = max([int(i.replace("Gencode_"," ")) for i in dat["GencodeExon"].values])
-        
-        #print(gencode_maxexon)
-        #print(alt_lastexon)
+        gencode_maxexon = max([int(i) for i in dat["GencodeExon"].values])
 
-        if str(gencode_maxexon) not in alt_lastexon:
-            output.append(transcript)
+        if str(gencode_maxexon) not in alt_last_exon:
+            AT.append(transcript)
 
-    return(output)
+    return AT
