@@ -376,8 +376,9 @@ def parse_transcript(gencode, parsed_transcriptome, transcript, wobble, order):
                   any(tranEnd in range(i-wobble, i+wobble) for i in other_gencode_ends)):
                 IR_exon = [i for i in other_gencode_ends if tranEnd in np.arange(i-wobble,i+wobble,1)][0]
                 IR_exon_df = gencode[gencode["end"] == IR_exon]
-                parsed.append(appText + ";IRMatch_Gencode_" + genExon + ";" + diff)
-                parsed.append(appText + ";IRMatch_Gencode_" + max(IR_exon_df["updated_exon_number"]) + ";" + diff)
+                # diff = 0 as matching with downstream exon 
+                parsed.append(appText + ";IRMatch_Gencode_" + genExon + ";0")
+                parsed.append(appText + ";IRMatch_Gencode_" + max(IR_exon_df["updated_exon_number"]) + ";0")
 
             elif order == "sense":
                 '''
@@ -530,9 +531,11 @@ def filter_parsed_transcript(gencode, parsed, output_log):
     # apply ranking to transcript exons
     ExonParsed = filterRank(GencodeParsedDf,'TranscriptExon')
     
+    # remove duplicated IRMatch entries that are not parsed
+    ExonParsed = ExonParsed.drop_duplicates()
+    
     assert len(ExonParsed[~ExonParsed['Class'].str.contains('IRMatch')]['TranscriptExon'].unique()) == len(ExonParsed[~ExonParsed['Class'].str.contains('IRMatch')]['TranscriptExon']), "Duplicated transcript exon entries"
     assert len(ExonParsed[~ExonParsed['Class'].str.contains('IRMatch')]['GencodeExon'].unique()) == len(ExonParsed[~ExonParsed['Class'].str.contains('IRMatch')]['GencodeExon']), "Duplicated gencode exon entries"
-
     
     for element in ExonParsed["Original"]:
         output_log.write(element + "\n")

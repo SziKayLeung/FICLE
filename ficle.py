@@ -129,7 +129,7 @@ def annotate_gene(args):
 
         # Intron Retention 
         print("Identifying transcripts with intron retention")
-        IR, IR_Counts, IR_Transcripts, IR_Exon1, IR_LastExon = ir.identify_intron_retention(df, All_FilteredParsed, gencode)
+        IR, IR_Counts, IR_ExonOverlap, IR_Transcripts, IR_Exon1, IR_LastExon = ir.identify_intron_retention(df, All_FilteredParsed, gencode)
 
         # Alternative A5' and A3' 
         print("Identifying transcripts with alternative 5' and 3' sites")
@@ -159,6 +159,7 @@ def annotate_gene(args):
         A5A3.to_csv(output_dir + "/Stats/" + args.genename + "_A5A3_tab.csv")
         IR.to_csv(output_dir + "/Stats/" + args.genename + "_IntronRetention_tab.csv", index = False)
         IR_Counts.to_csv(output_dir + "/Stats/" + args.genename + "_IntronRetentionCounts_tab.csv", index = False)
+        IR_ExonOverlap.to_csv(output_dir + "/Stats/" + args.genename + "_IntronRetentionExonOverlap_tab.csv", index = False)
         ES_SpecificExonSkipped.to_csv(output_dir + "/Stats/" + args.genename + "_Exonskipping_tab.csv", index = False)
         #NMD_output.to_csv(output_dir + "/Stats/" + args.genename + "_NMD_orf.csv")
         Transcript_Classifications_Remapped.to_csv(output_dir + "/Stats/" + args.genename + "_Final_Transcript_Classifications.csv")

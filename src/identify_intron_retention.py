@@ -6,31 +6,16 @@ import numpy as np
 from prepare_and_parse import generate_split_table
 from prepare_and_parse import class_by_transcript_pd
 
-def identify_intron_retention(df, All_FilteredParsed, gencode):
+'''
+Demystify the number of IR events as the number of exons with IR != IR events
+:row = list of the gencode exon number classified with IR 
+if row = [1, 2, 3, 5] --> Exon 1, 2, 3 with IR = 3 exons with IR but only 1 IR event 
+if row = [1, 3, 4] --> same IR through Exons 3, 4 therefore total 2 IR events 
 
-    '''
-    Aim: Tabulate the transcripts with intron retention from the All_FilteredParsed output
-    For the counts, apply the function to disentangle the actual number of IR events from the number of exons with IR 
-    1/ For transcripts with IR, order the number of exons with IR 
-    i.e gencode_IR = [1, 2, 3, 5] ==> Exons 1, 3 and 5 classified with IR
-
-    Last exon: if the IR is from the last exon of the updated reference
-
-    Output: 
-    output_df: Table of Transcripts with corresponding exon with intron retention
-    output_counts: The total number of transcripts with inton retention
-    '''
-
-    def demystify_IR(row):
-        '''
-        Demystify the number of IR events as the number of exons with IR != IR events
-        :row = list of the gencode exon number classified with IR 
-        if row = [1, 2, 3, 5] --> Exon 1, 2, 3 with IR = 3 exons with IR but only 1 IR event 
-        if row = [1, 3, 4] --> same IR through Exons 3, 4 therefore total 2 IR events 
-
-        # Catalogue the number of IR events based on the series of exons
-        IR event is considered if the next exon is more than one up (i.e. not continuous)
-        '''
+# Catalogue the number of IR events based on the series of exons
+IR event is considered if the next exon is more than one up (i.e. not continuous)
+'''
+def demystify_IR(row):
         first = row[0] # first ordered gencode exon with IR
         prev = row[0]  # tabulate the previous exon
         count = 1 # count of IR, starting with 1
@@ -46,12 +31,28 @@ def identify_intron_retention(df, All_FilteredParsed, gencode):
 
         return(count)
 
+
+'''
+Aim: Tabulate the transcripts with intron retention from the All_FilteredParsed output
+For the counts, apply the function to disentangle the actual number of IR events from the number of exons with IR 
+1/ For transcripts with IR, order the number of exons with IR 
+i.e gencode_IR = [1, 2, 3, 5] ==> Exons 1, 3 and 5 classified with IR
+
+Last exon: if the IR is from the last exon of the updated reference
+
+Output: 
+output_df: Table of Transcripts with corresponding exon with intron retention
+output_counts: The total number of transcripts with inton retention
+'''        
+def identify_intron_retention(df, All_FilteredParsed, gencode):
+
     max_exon = max([int(i) for i in gencode["updated_exon_number"]])
 
     IR = []    
     IR_Count = []
     IR_Exon1 = []
     IR_LastExon = []
+    IR_ExonOverlap = []
     # Iterate through each transcript
     for transcript in df['transcript_id'].unique():
         IRMatch_Count = 0
@@ -89,9 +90,14 @@ def identify_intron_retention(df, All_FilteredParsed, gencode):
                 # to avoid double counting IRMatch         
                 if "IRMatch" in IR_df["Class"].values: 
                     IRMatch_Count = len(np.unique(IR_df[IR_df["Class"] == "IRMatch"]["TranscriptExon"].values))
-                    IRMatch_Gencode = [int(i) for i in IR_df[IR_df["Class"] == "IRMatch"]["GencodeExon"].values]
+                    for t in np.unique(IR_df[IR_df["Class"] == "IRMatch"]["TranscriptExon"].values):                        
+                        IRMatch_Gencode = [int(i) for i in IR_df[(IR_df["Class"] == "IRMatch") & (IR_df["TranscriptExon"] == t)]["GencodeExon"].values]
+                        # + 1 to include all exons i.e exon 3 to exon 6 IR Match = 4 exons inclusive
+                        IR_ExonOverlap.append(transcript + "," + str(max(IRMatch_Gencode) - min(IRMatch_Gencode)+1))
+                    
+                    IRMatch_GencodeAll = [int(i) for i in IR_df[IR_df["Class"] == "IRMatch"]["GencodeExon"].values]
+                    gencode_IR = [i for i in gencode_IR if i not in IRMatch_GencodeAll]
 
-                    gencode_IR = [i for i in gencode_IR if i not in IRMatch_Gencode]
 
                 if len(gencode_IR) != 0: # if there are exons with intron retention
                     # change to integer, sort the order and apply the function
@@ -104,15 +110,18 @@ def identify_intron_retention(df, All_FilteredParsed, gencode):
     
     output_df = pd.DataFrame()
     output_counts = pd.DataFrame()
+    output_exon = pd.DataFrame()
+    output_overlap = pd.DataFrame()
     output_list = []
     try:
         output_df = generate_split_table(IR,"IR")
         output_counts = generate_split_table(IR_Count,"IR")
+        output_overlap = generate_split_table(IR_ExonOverlap,"IRNumExonsOverlaps")
         output_list = output_df["transcript_id"].unique()
     except:
         print("No transcripts with intron retention")
     
-    return output_df, output_counts, output_list, IR_Exon1, IR_LastExon
+    return output_df, output_counts, output_overlap, output_list, IR_Exon1, IR_LastExon
 
 
 
