@@ -102,7 +102,7 @@ def annotate_gene(args):
 
         # Exon Skipping 
         print("Processing transcripts for exon skipping")
-        ES = es.identify_exon_skipping(gencode,exon_tab)
+        ES = es.identify_exon_skipping(gencode,exon_tab,All_FilteredParsed)
         ES = es.skip_not_AFexons(ES, gencode)
         ES_Count, ES_SpecificExonSkipped, ES_Transcripts = es.output_exon_skipping_stats(ES)
 

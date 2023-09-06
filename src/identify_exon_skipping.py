@@ -85,44 +85,43 @@ def tabulate_exon_presence(gencode, df, All_FilteredParsed):
     return(df2)
 
 
-def identify_exon_skipping(gencode,exon_tab):
-    
-    '''
-    Aim: Used the parsed exon table of each transcript to identify exon skipping
-    1/ Iterate through each row of the exon_tab
-    2/ Iterate through each column of that row to identify the sequence of 0 and 1 for 
-    identifiying first exon, exon skipping, intron retention and if exon is present
-    :gencode = read gencode gtf
-    :exon_tab = table of exon presence output from tabulate_exon_presence()
-    
-    ** Intron Retention ** 
-    # IR defined by "2" until a "1" is present 
-    Important to distinguish exons that are IR rather than absent and thus mistakenly referred as ES 
-    
-    ** Absent Exons **
-    Some reference transcripts have fewer exons than other reference transcripts, 
-    thus a transcript can have fewer exons than all but is actually matching and does not exhibit ES
-    Reference exons that are missing in the transcript but are not classified w
-    ith a class (not even "No") given that the transcript exon is not present is captured as "1001"
-    
-    ** Exon Skipping **
-    # The "1" in the first sequence is always the first detected internal exon 
-    (note also other first exons but would be classified as novel)
-    # if 0 ==> "NA"
-    
-    # For all other exons, i.e. not first or last exon 
-    # The "1" refers to present i.e. not skipping 
-    # The "0" refers to absent i.e skipping        
-    
-    Output: Table of all transcripts as rows and gencode exons as columns 
-    1 = Gencode exon is present 
-    0 = Gencode exon not present
-    '''
-    
+'''
+Aim: Used the parsed exon table of each transcript to identify exon skipping
+1/ Iterate through each row of the exon_tab
+2/ Iterate through each column of that row to identify the sequence of 0 and 1 for 
+identifiying first exon, exon skipping, intron retention and if exon is present
+:gencode = read gencode gtf
+:exon_tab = table of exon presence output from tabulate_exon_presence()
+
+** Intron Retention ** 
+# IR defined by "2" until a "1" is present 
+Important to distinguish exons that are IR rather than absent and thus mistakenly referred as ES 
+
+** Absent Exons **
+Some reference transcripts have fewer exons than other reference transcripts, 
+thus a transcript can have fewer exons than all but is actually matching and does not exhibit ES
+Reference exons that are missing in the transcript but are not classified w
+ith a class (not even "No") given that the transcript exon is not present is captured as "1001"
+
+** Exon Skipping **
+# The "1" in the first sequence is always the first detected internal exon 
+(note also other first exons but would be classified as novel)
+# if 0 ==> "NA"
+
+# For all other exons, i.e. not first or last exon 
+# The "1" refers to present i.e. not skipping 
+# The "0" refers to absent i.e skipping        
+
+Output: Table of all transcripts as rows and gencode exons as columns 
+1 = Gencode exon is present 
+0 = Gencode exon not present
+'''
+def identify_exon_skipping(gencode,exon_tab,All_FilteredParsed):
+        
     # Create gencode list of possible exon numbers
     max_exon = max([int(i) for i in gencode["updated_exon_number"]])
     Gencode_exons = ["Gencode_" + str(i) for i in range(1,max_exon+1)] 
-    
+        
     # empty dataframe for Exon skiipping
     ES = pd.DataFrame(columns = Gencode_exons)
     data = []
@@ -132,6 +131,11 @@ def identify_exon_skipping(gencode,exon_tab):
         pre_value = []
         output = []
         
+        # last exon detected for transcript
+        dat = class_by_transcript_pd(index, All_FilteredParsed)
+        transcript_lastexon = max([int(i) for i in dat["GencodeExon"].values])
+        #print(transcript_lastexon)
+      
         # iterate through each value in the sequence of that row
         # count = keeps score of the sequence value as iterating through row
         for count, ele in enumerate(row):
@@ -147,9 +151,18 @@ def identify_exon_skipping(gencode,exon_tab):
                     pre_value = "2"
                 else:
                     output.append("NA")
-                    pre_value = "NA"                   
+                    pre_value = "NA" 
             
             # For internal exons
+            elif count == transcript_lastexon - 1:
+                if ele == 1:
+                    output.append("No")
+                else:
+                    output.append("Yes")
+            
+            elif count > transcript_lastexon - 1:
+                output.append("NA")
+                
             elif 0 < count < max_exon - 1:
                 if ele == 1001:
                     output.append("NA")
