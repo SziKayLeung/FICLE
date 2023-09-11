@@ -1,4 +1,4 @@
-# FICLE (Full Isoform Characterisation from (Targeted) Long-read Experiments)
+# FICLE (Full Isoform Characterisation from (Targeted) Long-read sequencing Experiments)
 
 <img align="left" src="https://github.com/SziKayLeung/FICLE/assets/33493350/415a11ad-07db-4d52-ad68-f1f19d6415ac" width="400" height="450">
 
@@ -15,5 +15,3 @@ Please see the Wiki page for more details:
 2. [How does FICLE work?](https://github.com/SziKayLeung/FICLE/wiki/How-does-FICLE-work%3F)
 3. [Running FICLE](https://github.com/SziKayLeung/FICLE/wiki/Running-FICLE)
 4. Understanding the output of FICLE
-
-
