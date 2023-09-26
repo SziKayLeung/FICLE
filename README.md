@@ -14,3 +14,7 @@ Please see the Wiki page for more details:
 2. [How does FICLE work?](https://github.com/SziKayLeung/FICLE/wiki/How-does-FICLE-work%3F)
 3. [Running FICLE](https://github.com/SziKayLeung/FICLE/wiki/Running-FICLE)
 4. Understanding the output of FICLE
+
+## Citations
+SK.Leung, A.R.Jeffries,...E.Hannon, J.Mill. **Long-read transcript sequencing identifies differential isoform expression in the entorhinal cortex in a transgenic model of tau pathology**.
+[doi: https://doi.org/10.1101/2023.09.20.558220](https://www.biorxiv.org/content/10.1101/2023.09.20.558220v1) 
