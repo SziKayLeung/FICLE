@@ -14,6 +14,6 @@ Please see the Wiki page for more details:
 1. [Introduction](https://github.com/SziKayLeung/FICLE/wiki/Introduction)
 2. [How does FICLE work?](https://github.com/SziKayLeung/FICLE/wiki/How-does-FICLE-work%3F)
 3. [Running FICLE](https://github.com/SziKayLeung/FICLE/wiki/Running-FICLE)
-4. Understanding the output of FICLE
+4. [Understanding the output of FICLE](https://github.com/SziKayLeung/FICLE/wiki/FICLE-output)
 
 
