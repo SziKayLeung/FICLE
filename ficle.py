@@ -157,7 +157,7 @@ def main():
     
     args = parser.parse_args()
     print("************ Running FICLE...", file=sys.stdout)
-    print("version:", args.version, file=sys.stdout)
+    print("version:", __version__)
     annotate_gene(args)        
     
 if __name__ == "__main__":
