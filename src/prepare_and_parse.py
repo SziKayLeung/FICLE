@@ -9,6 +9,8 @@ import subprocess
 import shutil
 import logging 
 from gtfparse import read_gtf
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning) #gtfparse future warnings
 
 logger = logging.getLogger()
 srcPath = os.path.dirname(os.path.realpath(__file__)) 
