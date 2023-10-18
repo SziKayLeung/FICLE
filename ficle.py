@@ -3,7 +3,7 @@
 # Authors: Szi Kay Leung
 
 __author__  = "S.K.Leung@exeter.ac.uk"
-__version__ = '1.1.2'  # Python 3.7
+__version__ = '1.1.3'  # Python 3.7
 
 ## Load Libraries
 import gtfparse
