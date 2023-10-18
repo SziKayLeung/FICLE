@@ -2,6 +2,7 @@
 # alternative promoter and alternative terminator
 
 import pandas as pd
+import numpy as np
 from prepare_and_parse import class_by_transcript_pd
 from prepare_and_parse import generate_split_table
 from prepare_and_parse import determine_order
@@ -58,9 +59,8 @@ def identify_novel_exon(df, gencode, All_FilteredParsed):
         print("Number of unique novel exons:" , len(set(NE_coordinates))) 
         
         # convert list of coordinates to table for output
-        NE_coordinates = pd.DataFrame(NE_coordinates)
-        NE_coordinates.columns = ["Coordinates"]
-        NE_coordinates[['start', 'end']] = NE_coordinates["Coordinates"].str.split(',', 1, expand=True)
+        NE_coordinates = pd.DataFrame([np.unique(gencode["seqname"])[0] + " " + i.split(",")[0] + " " +  i.split(",")[1] 
+                                       for i in NE_coordinates])
 
     except:
         print("no novel exons")

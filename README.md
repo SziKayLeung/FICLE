@@ -1,4 +1,4 @@
-# FICLE 
+# FICLE (Full Isoform Characterisation from (Targeted) Long-read Experiments)
 
 <img align="left" src="https://github.com/SziKayLeung/FICLE/assets/33493350/c998696c-6820-4b36-950f-603cbe2b93e3" width="400" height="450">
 
@@ -13,7 +13,7 @@ Please see the Wiki page for more details:
 1. [Introduction](https://github.com/SziKayLeung/FICLE/wiki/Introduction)
 2. [How does FICLE work?](https://github.com/SziKayLeung/FICLE/wiki/How-does-FICLE-work%3F)
 3. [Running FICLE](https://github.com/SziKayLeung/FICLE/wiki/Running-FICLE)
-4. Understanding the output of FICLE
+4. [Understanding the output of FICLE](https://github.com/SziKayLeung/FICLE/wiki/FICLE-output)
 
 ## Citations
 SK.Leung, A.R.Jeffries,...E.Hannon, J.Mill. **Long-read transcript sequencing identifies differential isoform expression in the entorhinal cortex in a transgenic model of tau pathology**.

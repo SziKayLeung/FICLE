@@ -49,16 +49,30 @@ def identify_A5A3_transcripts(df, All_FilteredParsed):
 def identify_alternative_first(df, All_FilteredParsed):
     
     '''
-    Aim: Tabulate the transcripts with alterantive first exons from the All_FilteredParsed output    
+    Aim: Tabulate the transcripts with alterantive first exon (extended,truncated) from the All_FilteredParsed output
+    
+    Output: 
+    output_df: Table of Transcripts with corresponding first exon with extension or truncation
+    output_counts: The total number of transcripts with extended or truncated first exons
+    output_transcripts: List of transcripts with AF
     '''
         
     AF = []    
-    # Iterate through each transcript
     for transcript in df['transcript_id'].unique():
-        class_transcript_exon,class_gencode_exon = class_by_transcript(transcript,  All_FilteredParsed)
-        for i in class_gencode_exon:
-            if "AF" in i:
-                AF.append(transcript)
+        dat = class_by_transcript_pd(transcript,  All_FilteredParsed)
+        datAF = dat[(dat['Class'].str.contains('Truncated|Extended', case=False, regex=True)) & (dat['TranscriptExon'] == 'Exon1')]
+        if len(datAF) > 0:
+            AF.append([transcript + "," + datAF["ClassGencodeExon"].values[0]])
     
-    return(AF)
+    output_df = pd.DataFrame()
+    output_counts = pd.DataFrame()
+    output_transcripts = []
+    try:
+        output_df = generate_split_table(sum(AF, []),"AF")[["transcript_id","AF"]]
+        output_counts = output_df['AF'].str.split('_', 1, expand=True).groupby([0]).size().reset_index(name='count')
+        output_transcripts = list(output_df["transcript_id"].unique())     
+    except:
+        print("No Transcripts with AF")
+    
+    return output_df, output_counts, output_transcripts
 

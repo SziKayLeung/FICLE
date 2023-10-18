@@ -1,0 +1,163 @@
+---
+title: "FICLE Output"
+author: "Szi Kay Leung"
+date: "11/08/2023"
+output: rmdformats::robobook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(kableExtra)
+```
+
+Shown below are output plots that can be generated from files generated using FICLE. 
+
+## Setup 
+
+Source scripts for plotting from [LOGen](https://github.com/SziKayLeung/LOGen/tree/master) directory. 
+
+```{r source,message=FALSE,results=FALSE}
+LOGEN_ROOT = "/gpfs/mrc0/projects/Research_Project-MRC148213/sl693/scripts/LOGen/"
+sapply(list.files(path = paste0(LOGEN_ROOT,"target_gene_annotation"), pattern="*summarise*", full = T), source,.GlobalEnv)
+source(paste0(LOGEN_ROOT, "aesthetics_basics_plots/pthemes.R"))
+source(paste0(LOGEN_ROOT, "transcriptome_stats/read_sq_classification.R"))
+source(paste0(LOGEN_ROOT, "merge_characterise_dataset/run_ggtranscript.R"))
+```
+
+
+## Input
+
+1. ficleDir = path of FICLE directory output 
+2. classFilesName = SQANTI classification output file 
+
+```{r input,message=FALSE,results=FALSE}
+
+ficleDir = "/gpfs/mrc0/projects/Research_Project-MRC148213/sl693/Ailsa/FICLE/"
+classFilesName = "/gpfs/mrc0/projects/Research_Project-MRC190311/Ailsa/Targeted/Ailsa/AM/20220623_1515_2E_PAI82330_18b0e941/Porechop/pc_test/combined/SQANTI3_whole_RulesFilter_result_classification.targetgenes_counts_filtered.txt"
+classFiles = SQANTI_class_preparation(classFilesName,"ns")
+
+# gtf files
+inputGtf = as.data.frame(rtracklayer::import("/gpfs/mrc0/projects/Research_Project-MRC190311/Ailsa/Targeted/Ailsa/AM/20220623_1515_2E_PAI82330_18b0e941/Porechop/pc_test/combined/SQANTI3_whole.filtered_filtered2reads2samples.gtf"))
+refGtf = as.data.frame(rtracklayer::import("/gpfs/mrc0/projects/Research_Project-MRC148213/sl693/references/annotation/STAT3_gencode.gtf"))
+mergedGtf <- rbind(inputGtf[,c("seqnames","strand","start","end","type","transcript_id","gene_id")] ,
+                   refGtf[,c("seqnames","strand","start","end","type","transcript_id","gene_id")])
+
+```
+
+## Identify isoforms by AS events {.tabset .tabset-fade}
+
+### A5' A3' 
+
+```{r a5a3tab}
+A5A3 <- input_FICLE_splicing_results(ficleDir,"A5A3_tab")
+Stat3A5A3 <- A5A3 %>% filter(associated_gene == "STAT3") %>% filter(gencode_exon %in% c("Gencode_2")) 
+```
+
+Examples of transcripts with alternative splice site of gencode 2 exon: `r Stat3A5A3$transcript_id`
+
+```{r a5a3tabresults, echo=FALSE}
+Stat3A5A3  %>%
+  kbl() %>%
+  kable_styling()
+
+```
+
+### Exon skipping 
+
+```{r exonskippingtab}
+ES <- input_FICLE_splicing_results(ficleDir,"Exonskipping_tab")
+Stat3ES <- ES %>% filter(associated_gene == "STAT3") %>% filter(ES %in% c("Gencode_2")) 
+```
+Examples of transcripts with exon skipping: `r paste0(Stat3ES$transcript_id[1:10], sep = ",")`
+
+```{r exonskippingtabresults, echo=FALSE}
+Stat3ES[1:10,]  %>%
+  kbl() %>%
+  kable_styling()
+```
+
+### Novel exons
+
+```{r novelexon}
+NovelExons <- input_FICLE_splicing_results(ficleDir,"NE_counts_pertrans")
+Stat3NE <- NovelExons %>% filter(associated_gene == "STAT3") %>% filter(novelexons %in% c("Beyond_First","Internal_NovelExon"))
+```
+Examples of transcripts with novel exon: `r paste0(Stat3NE$transcript_id[1:10],sep = ",")`
+
+## Visualisation using ggtranscript {.tabset .tabset-fade}
+
+### Plot 1
+
+```{r ggtranscript1,warning=FALSE}
+ggTranPlots(inputGtf, 
+            classFiles,
+            isoList =  unique(inputGtf$transcript_id)[1:6],
+            colours = c("#F8766D",wes_palette("Darjeeling2")[2],"#00BFC4","#7CAE00",wes_palette("GrandBudapest2")[2],wes_palette("Zissou1")[4]),
+            lines = c("#F8766D",wes_palette("Darjeeling2")[2],"#00BFC4","gray",wes_palette("GrandBudapest2")[2],wes_palette("Zissou1")[4]),
+            gene = "STAT3")
+```
+
+### Plot 2
+
+```{r ggtranscript2,warning=FALSE,message=FALSE,fig.width = 20, fig.height = 20}
+IsoList <- data.frame(
+  Isoform = unlist(IsoList <- list(
+    Reference = unique(refGtf[refGtf$gene_name == "STAT3" & !is.na(refGtf$transcript_id), "transcript_id"]),
+    A5A3 = "PB.6725.182",
+    ES = as.character(unique(Stat3ES$transcript_id)[1:5]),
+    `Novel Exons` = as.character(unique(Stat3NE$transcript_id)[1:5]),
+    DTE = c("PPB.6725.9950")
+  )),
+  Category = rep(names(IsoList), lengths(IsoList))
+)
+IsoList$colour <- c(rep(NA,length(IsoList$Category[IsoList$Category != "DTE"])),wes_palette("Darjeeling1")[3])
+
+ggTranPlots(mergedGtf, classFiles,
+                       isoList = c(as.character(IsoList$Isoform)),
+                       selfDf = IsoList, gene = "STAT3")
+```
+
+
+## Dendrogram
+
+Shown is an example of a cluster dendrogram of the isoforms annotated to STAT3. Each row corresponds to an isoform and each column represents an exon. The isoforms are further clustered by exonic structure and two key splicing events - exon skipping (ES) and intron retention (IR), to ease visualisation. Providing an overview of the isoform landscape, we can evidently see occurrence of exon skipping events of exons 1 - 3, and exon 24.
+
+```{r dendro, warning=FALSE}
+plot_dendro_Tgene(ficleDir, "STAT3")
+```
+
+## A5A3 
+
+Shown is a bar-plot of the number of isoforms with exons that have alternative splice sites - alternative 5' and 3' extension and truncation. 
+
+```{r A5A3}
+plot_A5A3_Tgene(ficleDir, "STAT3")
+```
+
+## Exon skipping  {.tabset .tabset-fade}
+
+### Plot 1
+
+Shown is a bar plot of the number of isoforms with the different exons skipped. For example, we see over 500 isoforms with exon 2, exon 3 and exon 24 skipped. 
+
+```{r exonskipping, message = FALSE}
+plot_ES_Tgene(ficleDir,"STAT3",classFiles)[[1]]
+```
+
+### Plot 2
+
+Shown is a bar-plot of the total number of exons skipped. For example, 200 isoforms (27.3%) had one exon skipped. Notably, we observe a few isoforms where 17 exons were skipped.
+
+```{r exonskipping2, message = FALSE}
+plot_ES_Tgene(ficleDir,"STAT3",classFiles)[[2]]
+```
+
+## Intron retention
+
+For this given gene, no intron retention events were detected.
+
+```{r intronretention, message = FALSE}
+
+plot_IR_Tgene(ficleDir,"STAT3",classFiles)
+```
+
