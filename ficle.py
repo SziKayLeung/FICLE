@@ -1,6 +1,8 @@
-#!/usr/bin/env python
-# Szi Kay Leung (sl693@exeter.ac.uk)
+#!/usr/bin/env python3
+# FICLE
+# Authors: Szi Kay Leung
 
+__author__  = "S.K.Leung@exeter.ac.uk"
 __version__ = '1.1.2'  # Python 3.7
 
 ## Load Libraries
@@ -12,7 +14,6 @@ import collections
 from collections import Counter
 import csv
 import sys
-#import dill
 import sys
 import shutil
 import os
@@ -32,9 +33,13 @@ from src import classify_mapt_isoforms as mapt
 pd.options.mode.chained_assignment = None  # default='warn'
 
 def annotate_gene(args):
-    gencode_gtf = args.reference + "/" + args.genename + "_gencode.gtf"
-    output_dir = args.output_dir + "/" + args.genename + "/"
-    output_log = output_dir + "parsed_transcripts.txt" 
+    
+    # prepare output directories
+    args = prep.create_output_dir(args)
+    
+    # subset reference from gene
+    prep.subset_reference(args)
+    output_log = open(args.gene_stats_dir + args.genename + "parsed_transcripts.txt", "w") 
     
     # check the species dataset based on the gene input
     # Human = Gene is all in capitals
@@ -50,21 +55,12 @@ def annotate_gene(args):
     else:
         print("Not using ORF for classification")
         ORF = None
-    
-    # read classification file 
-    print("Reading", args.input_class)
-    classf = pd.read_csv(args.input_class, sep = "\t")
-    
-    # prepare directory
-    print("(Re)generating files")
-    fo.delete_make_dir(output_dir)
-    output_log = open(output_log, "w")
 
     # read in gencode and transcriptome gtf
-    gencode,order = prep.parse_gencode_reference(gencode_gtf, args.genename)
+    gencode,order = prep.parse_gencode_reference(args)
     gencode.rename({'transcript': 'transcript_id'}, axis=1, inplace=True)
 
-    df = prep.parse_transcriptome_gtf(args.input_gtf, args.genename, classf, order) 
+    df = prep.parse_transcriptome_gtf(args, order) 
     
     if len(df) > 0:
 
@@ -92,19 +88,19 @@ def annotate_gene(args):
 
         # Tabulate exon presence 
         print("Tabulating exon presence")
-        exon_tab = es.tabulate_exon_presence(gencode, df, All_FilteredParsed)
+        exon_tab = es.tabulate_exon_presence(args, gencode, df, All_FilteredParsed)
 
         if args.genename == "MAPT" or args.genename == "Mapt":
             print("Further classifiying MAPT isoforms by exons 2, 3 and 10")
             mapt_exon_tab, mapt_exon_tab_counts = mapt.classify_mapt_isoforms(species, exon_tab, gencode)
-            mapt_exon_tab.to_csv(output_dir + "/Stats/" + args.genename + "_further_classifications.csv",index_label="isoform")
-            mapt_exon_tab_counts.to_csv(output_dir + "/Stats/" + args.genename + "_further_classifications_counts.csv")
+            mapt_exon_tab.to_csv(args.gene_stats_dir + args.genename + "_further_classifications.csv",index_label="isoform")
+            mapt_exon_tab_counts.to_csv(args.gene_stats_dir + args.genename + "_further_classifications_counts.csv")
 
         # Exon Skipping 
         print("Processing transcripts for exon skipping")
         ES = es.identify_exon_skipping(gencode,exon_tab,All_FilteredParsed)
         ES = es.skip_not_AFexons(ES, gencode)
-        ES_Count, ES_SpecificExonSkipped, ES_Transcripts = es.output_exon_skipping_stats(ES)
+        ES_Counts, ES_Transcripts = es.output_exon_skipping_stats(args, ES)
 
         # Alternative First Promoter    
         Alternative_First_Promoter = apat.identify_alternative_promoter(df, gencode, All_FilteredParsed)
@@ -117,23 +113,18 @@ def annotate_gene(args):
 
         # Novel Exons 
         print("Identifying transcripts with novel exons")
-        NE, NE_novel_co = ne.identify_novel_exon(df, gencode, All_FilteredParsed)
+        NE = ne.identify_novel_exon(args, df, gencode, All_FilteredParsed)
         NE_classify, NExons_BeyondFirst, NExons_BeyondFirstLast, NExons_BeyondLast, NExons_Internal, NExons_First, NExons_Last = ne.classify_novel_exon(gencode, order, df, NE, All_FilteredParsed)
-        NE_pertrans_classify_counts = pd.DataFrame()
-        if len(NE) > 0: 
-            NE_pertrans_counts, NE_classify_counts, NE_pertrans_classify_counts = ne.novel_exon_stats(NE, NE_classify)
-            NE.to_csv(output_dir + "/Stats/" + args.genename + "_NE.csv")
-            NE_classify_counts.to_csv(output_dir + "/Stats/" + args.genename + "_NE_counts.csv")
-            NE_pertrans_classify_counts.to_csv(output_dir + "/Stats/" + args.genename + "_NE_counts_pertrans.csv")
-            NE_novel_co.to_csv(output_dir + "/Stats/" + args.genename + "_NE_coordinates.csv", header=False, index=False)
+        NE_Counts = pd.DataFrame()
+        if len(NE) > 0: NE_Counts = ne.novel_exon_stats(args, NE, NE_classify)
 
         # Intron Retention 
         print("Identifying transcripts with intron retention")
-        IR, IR_Counts, IR_ExonOverlap, IR_Transcripts, IR_Exon1, IR_LastExon = ir.identify_intron_retention(df, All_FilteredParsed, gencode)
+        IR_Counts, IR_Transcripts, IR_Exon1, IR_LastExon = ir.identify_intron_retention(args, df, All_FilteredParsed, gencode)
 
         # Alternative A5' and A3' 
         print("Identifying transcripts with alternative 5' and 3' sites")
-        A5A3, A5A3_pertrans_counts, A5A3_Counts, A5A3_Transcripts = aprime.identify_A5A3_transcripts(df, All_FilteredParsed)
+        A5A3_Counts, A5A3_Transcripts = aprime.identify_A5A3_transcripts(args, df, All_FilteredParsed)
 
         # Final Output 
         # Event lists = each category is generated from previous functions and contain list of transcripts under that event type
@@ -143,31 +134,14 @@ def annotate_gene(args):
               NExons_Internal,NExons_BeyondLast,NExons_BeyondFirstLast]
 
         Transcript_Classifications = fo.generate_aggregated_classification(df, categories)
-        fo.prioritise_write_output(df, Transcript_Classifications, output_dir, args.genename, args.input_bed)
-        Transcript_Classifications_Remapped = fo.populate_classification(Transcript_Classifications, 
-                                                                         A5A3, IR_Counts, ES_Count, NE, NE_pertrans_classify_counts)
-
-        #NMD_output = call_NMD_prediction()
-
-        # generate multiregion file 
-        #gm.generate_multiregion(df, NE_novel_co,gencode)
-
-        # All other stats 
-        gencode.to_csv(args.reference + args.genename + "_gencode_automated.csv")
-        exon_tab.to_csv(output_dir + "/Stats/" + args.genename + "_Exon_tab.csv")
-        ES.to_csv(output_dir + "/Stats/" + args.genename + "_Exonskipping_generaltab.csv")
-        A5A3.to_csv(output_dir + "/Stats/" + args.genename + "_A5A3_tab.csv")
-        IR.to_csv(output_dir + "/Stats/" + args.genename + "_IntronRetention_tab.csv", index = False)
-        IR_Counts.to_csv(output_dir + "/Stats/" + args.genename + "_IntronRetentionCounts_tab.csv", index = False)
-        IR_ExonOverlap.to_csv(output_dir + "/Stats/" + args.genename + "_IntronRetentionExonOverlap_tab.csv", index = False)
-        ES_SpecificExonSkipped.to_csv(output_dir + "/Stats/" + args.genename + "_Exonskipping_tab.csv", index = False)
-        #NMD_output.to_csv(output_dir + "/Stats/" + args.genename + "_NMD_orf.csv")
-        Transcript_Classifications_Remapped.to_csv(output_dir + "/Stats/" + args.genename + "_Final_Transcript_Classifications.csv")
-        gencode.to_csv(output_dir + "/Stats/" + args.genename + "flattened_gencode.csv")
+        fo.prioritise_write_output(args, df, Transcript_Classifications)
+        fo.populate_classification(args, Transcript_Classifications, A5A3_Counts, IR_Counts, ES_Counts, NE_Counts)   
     
     else:
         print("No detected isoforms")
-        shutil.rmtree(output_dir)
+        shutil.rmtree(args.gene_root_dir)
+    
+    print("**** All Done! ****")
 
     
 def main():
@@ -180,12 +154,11 @@ def main():
     parser.add_argument("--cpat", help='\t\ORF_prob.best.tsv file generated from CPAT',required=False)
     parser.add_argument("-o","--output_dir", help='\t\tOutput path for the annotation and associated files')
     parser.add_argument("-v","--version", help="Display program version number.", action='version', version='FICLE '+str(__version__))
-
+    
     args = parser.parse_args()
     print("************ Running FICLE...", file=sys.stdout)
-    annotate_gene(args)    
-    print("**** All Done! ****")
-    
+    print("version:", __version__)
+    annotate_gene(args)        
     
 if __name__ == "__main__":
     main()

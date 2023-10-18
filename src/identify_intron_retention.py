@@ -44,7 +44,7 @@ Output:
 output_df: Table of Transcripts with corresponding exon with intron retention
 output_counts: The total number of transcripts with inton retention
 '''        
-def identify_intron_retention(df, All_FilteredParsed, gencode):
+def identify_intron_retention(args, df, All_FilteredParsed, gencode):
 
     max_exon = max([int(i) for i in gencode["updated_exon_number"]])
 
@@ -115,13 +115,20 @@ def identify_intron_retention(df, All_FilteredParsed, gencode):
     output_list = []
     try:
         output_df = generate_split_table(IR,"IR")
-        output_counts = generate_split_table(IR_Count,"IR")
-        output_overlap = generate_split_table(IR_ExonOverlap,"IRNumExonsOverlaps")
-        output_list = output_df["transcript_id"].unique()
+        output_df[['category', 'gencodeExon']] = output_df['IR'].str.split('_', 1, expand=True)
+        output_df = output_df[['transcriptID','category','gencodeExon']]
+        output_counts = generate_split_table(IR_Count,"numEvents")
+        output_overlap = generate_split_table(IR_ExonOverlap,"numExonsOverlaps")
+        output_list = output_df["transcriptID"].unique()
+
+        output_df.to_csv(args.gene_stats_dir + args.genename + "_IR_transcript_level.csv", index = False)
+        output_counts.to_csv(args.gene_stats_dir + args.genename + "_IR_events_counts.csv", index = False)
+        output_overlap.to_csv(args.gene_stats_dir + args.genename + "_IR_numExonOverlap.csv", index = False)
     except:
         print("No transcripts with intron retention")
+
     
-    return output_df, output_counts, output_overlap, output_list, IR_Exon1, IR_LastExon
+    return output_counts, output_list, IR_Exon1, IR_LastExon
 
 
 
