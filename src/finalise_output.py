@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import collections
 import os
-import shutil
+
 
 def generate_aggregated_classification(df, categories):
     
@@ -31,15 +31,14 @@ def generate_aggregated_classification(df, categories):
                                           "A5A3","AF","AP","AT","ES","IR","IR_Exon1Only", "IR_LastExonOnly",
                                           "NE_1st","NE_Int","NE_Last","NE_FirstLast"]
     Transcript_Classifications.index = df['transcript_id'].unique()
-    
-    # sum of novel exons across all novel exon cateogories
+    # note just for prioritise_write_output as need to recreate column for exact number of novel exons 
     Transcript_Classifications["NE_All"] = Transcript_Classifications[["NE_1st","NE_Int","NE_Last","NE_FirstLast"]].sum(axis=1)
-    
+        
     return(Transcript_Classifications)
 
 
 
-def prioritise_write_output(df, Transcript_Classifications, output_dir, gene, input_bed):
+def prioritise_write_output(args, df, Transcript_Classifications):
     
     '''
     Aim: Generate gtf for the different categories, prioiritised by: 
@@ -102,10 +101,10 @@ def prioritise_write_output(df, Transcript_Classifications, output_dir, gene, in
             print("Not Classified for Final output:" + transcript)
     
     # split coloured sorted bed file 
-    bed = pd.read_csv(input_bed, sep = "\t", header = None)
+    bed = pd.read_csv(args.input_bed, sep = "\t", header = None)
     
     # write the output to a log file 
-    output_file = open(output_dir + "/" + gene + "_" + "Locator_Bedfiles.txt","w")
+    output_file = open(args.gene_tracks_dir + "/" + args.genename + "_" + "Locator_Bedfiles.txt","w")
     for element in Output:
         output_file.write(element + "\n")  
 
@@ -114,7 +113,7 @@ def prioritise_write_output(df, Transcript_Classifications, output_dir, gene, in
     Final_Output = [(i.split(",",2)[0], i.split(",",2)[1]) for i in Output]
     print("**** Final classification of transcripts by...")
     for i in set([x[1] for x in Final_Output]):
-        path = output_dir + "/" + gene + "_" +  str(i) 
+        path = args.gene_tracks_dir + "/" + args.genename + "_" +  str(i) 
         filter_output = [x[0] for x in list(filter(lambda cate: cate[1] == i, Final_Output))]
         # subset the bedfiles from the group of transcript per categories
         group = bed[bed[3].isin(filter_output)]
@@ -128,7 +127,7 @@ def prioritise_write_output(df, Transcript_Classifications, output_dir, gene, in
             group.to_csv(path + "_sorted_coloured.bed12", sep = "\t", index = None, header = None)
    
    
-def populate_classification(Transcript_Classifications, A5A3, IR_Counts, ES_Count, NE, NE_pertrans_classify_counts):
+def populate_classification(args, Transcript_Classifications, A5A3_Counts, IR_Counts, ES_Counts, NE_Counts):
     '''
     Aim: Repopulate the "1" in the classification table with the actual number of events per transcript
     Using the counts stats output across the event types 
@@ -138,8 +137,8 @@ def populate_classification(Transcript_Classifications, A5A3, IR_Counts, ES_Coun
     '''
         
     def generate_NE_dict(cate):
-        dat = NE_pertrans_classify_counts[NE_pertrans_classify_counts["novelexons"] == cate]
-        dat_dict = dict(zip(dat["transcript_id"],dat[0]))
+        dat = NE_Counts[NE_Counts["NEtype"] == cate]
+        dat_dict = dict(zip(dat["transcriptId"],dat["numNovelExons"]))
         return(dat_dict)
     
     def remap_transcript_classification(col, input_dict):
@@ -148,22 +147,22 @@ def populate_classification(Transcript_Classifications, A5A3, IR_Counts, ES_Coun
         return(new_col)
     
    
-    if(sum(Transcript_Classifications["A5A3"]) > 0): Transcript_Classifications['A5A3'] = remap_transcript_classification("A5A3", collections.Counter(A5A3["transcript_id"]))
-    if(sum(Transcript_Classifications["IR"]) > 0): Transcript_Classifications['IR'] = remap_transcript_classification("IR", dict(zip(IR_Counts["transcript_id"],IR_Counts["IR"])))
-    Transcript_Classifications['ES'] = remap_transcript_classification("ES", dict(zip(ES_Count.index,ES_Count["Count"])))
+    if(sum(Transcript_Classifications["A5A3"]) > 0): Transcript_Classifications['A5A3'] = remap_transcript_classification("A5A3", collections.Counter(A5A3_Counts["transcriptID"]))
+    if(sum(Transcript_Classifications["IR"]) > 0): Transcript_Classifications['IR'] = remap_transcript_classification("IR", dict(zip(IR_Counts["transcriptID"],IR_Counts["numEvents"])))
+    Transcript_Classifications['ES'] = remap_transcript_classification("ES", dict(zip(ES_Counts.index,ES_Counts["numEvents"])))
      
-    if(len(NE) > 0):
+    if(len(NE_Counts) > 0):
         Transcript_Classifications['NE_1st'] = remap_transcript_classification("NE_1st", generate_NE_dict("Beyond_First"))
         Transcript_Classifications['NE_Int'] = remap_transcript_classification("NE_Int", generate_NE_dict("Internal_NovelExon"))
         Transcript_Classifications['NE_Last'] = remap_transcript_classification("NE_Last", generate_NE_dict("Beyond_Last"))
         Transcript_Classifications['NE_FirstLast'] = remap_transcript_classification("NE_Last", generate_NE_dict("Beyond_First_Last"))
+        # sum of novel exons after remapping across all novel exon cateogories
+        Transcript_Classifications["NE_All"] = Transcript_Classifications[["NE_1st","NE_Int","NE_Last","NE_FirstLast"]].sum(axis=1)
+        
+    # write output 
+    Transcript_Classifications.drop('isoform', axis=1, inplace=True)
+    Transcript_Classifications.index.name = 'isoform'
+    Transcript_Classifications = Transcript_Classifications.astype(int)
+    Transcript_Classifications.to_csv(args.gene_stats_dir + args.genename + "_final_transcript_classifications.csv")
     
     return(Transcript_Classifications) 
-
-
-def delete_make_dir(output_dir):
-    if os.path.isdir(output_dir):  
-        shutil.rmtree(output_dir)
-      
-    os.mkdir(output_dir)
-    os.mkdir(output_dir + "/Stats")

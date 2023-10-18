@@ -11,7 +11,7 @@ from prepare_and_parse import class_by_transcript
 from prepare_and_parse import generate_split_table
 from prepare_and_parse import determine_order
 
-def tabulate_exon_presence(gencode, df, All_FilteredParsed):
+def tabulate_exon_presence(args, gencode, df, All_FilteredParsed):
     df_transcript_id = df['transcript_id'].unique()
 
     '''
@@ -81,6 +81,11 @@ def tabulate_exon_presence(gencode, df, All_FilteredParsed):
     num_exons_pertrans = (df2 == 1).astype(int).sum(axis=1)
     print("Number of transcripts with number of exons")
     print(Counter(num_exons_pertrans))
+    
+    # write to csv
+    df2_output = df2 
+    df2_output.index.name = 'isoform'
+    df2_output.to_csv(args.gene_stats_dir + args.genename + "_exon_tab.csv")  
     
     return(df2)
 
@@ -505,7 +510,7 @@ def gene_specific_human(gene, df, ES, All_FilteredParsed, gencode_gtf):
         return(ES)
     
     
-def output_exon_skipping_stats(ES):
+def output_exon_skipping_stats(args, ES):
     
     '''
     Aim: Tabulate Stats for exon skipping 
@@ -525,8 +530,9 @@ def output_exon_skipping_stats(ES):
         # Count the number of "Yes" per row (Transcript) in ES table
         # Filter the rows (Transcript) with 0 exons skipped
         ES_Count = pd.DataFrame((ES.applymap(lambda x: str.count(x, 'Yes')) == 1).astype(int).sum(axis=1))
-        ES_Count.columns = ['Count']
-        ES_Count = ES_Count.loc[ES_Count["Count"] != 0,]
+        ES_Count.columns = ['numEvents']
+        ES_Count = ES_Count.loc[ES_Count["numEvents"] != 0,]
+        ES_Count.index.name = 'transcriptID'
 
         # Table 2: Gencode Exon skipped per transcript
         output = []
@@ -545,18 +551,25 @@ def output_exon_skipping_stats(ES):
         # For each cell in ES, count the number of "Yes" i.e if gencode exon skipped for that transcript ==> 1
         # Count down the number of "1" for each column 
         num_exons_skipped = ES.applymap(lambda x: str.count(x, 'Yes'))
-        num_exons_skipped_pertrans = (num_exons_skipped == 1).astype(int).sum(axis=0)
+        num_exons_skipped_pertrans = pd.DataFrame((num_exons_skipped == 1).astype(int).sum(axis=0))
+        num_exons_skipped_pertrans.columns = ['numTranscripts']
+        num_exons_skipped_pertrans.index.name = 'gencodeExon'
         #print("Number of transcripts with the gencode exon skipped, ignore first and last exon")
         #print(num_exons_skipped_pertrans)
 
         # Output 4: List of Transcripts with Exon Skipping 
-        ES_Transcripts = list(ES_Count.loc[ES_Count["Count"] != 0,].index)
+        ES_Transcripts = list(ES_Count.loc[ES_Count["numEvents"] != 0,].index)
+
+        # write output
+        ES_SpecificExonSkipped.to_csv(args.gene_stats_dir + args.genename + "_ES_transcript_level.csv", index = False)
+        ES_Count.to_csv(args.gene_stats_dir + args.genename + "_ES_events_counts.csv")
+        num_exons_skipped_pertrans.to_csv(args.gene_stats_dir + args.genename + "_ES_exon_counts.csv")
 
     except:
         print("No transcripts with exon skipping")
   
     
-    return ES_Count, ES_SpecificExonSkipped, ES_Transcripts
+    return ES_Count, ES_Transcripts
     
     
     

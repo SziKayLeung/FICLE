@@ -1,22 +1,25 @@
 #!/usr/bin/env python
 # prepare_reference_transcript_gtf
 
-from gtfparse import read_gtf
 import numpy as np
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
 import pandas as pd
 import sys
 import os
+import subprocess 
+import shutil
+import logging 
+from gtfparse import read_gtf
 
+logger = logging.getLogger()
 srcPath = os.path.dirname(os.path.realpath(__file__)) 
 sys.path.insert(1, srcPath)
 
-
 '''
+create_output_dir(args)
 determine_order(gencode)
 parse_gencode_reference(gencode_gtf, gene)
 replace_geneid(df, classf)
+subset_reference
 parse_transcriptome_gtf(input_gtf, gene, classf)
 parse_transcript(gencode, parsed_transcriptome, transcript, wobble, order)
 filter_parsed_transcript(gene, gencode, parsed, output_log)
@@ -25,6 +28,29 @@ class_by_transcript(transcript, All_FilteredParsed)
 generate_split_table(list2table,colname)
 reidentify_isoform_dataset(input_file)
 '''
+
+'''
+create output directories <TargetGenesRef> and <TargetGenes>
+'''
+def create_output_dir(args):
+    # create output directories 
+    args.ref_output_dir = args.output_dir + "TargetGenesRef"
+    args.gene_root_dir = args.output_dir + "TargetGenes/" + args.genename
+    args.gene_stats_dir = args.gene_root_dir + "/Stats/"                          
+    args.gene_tracks_dir = args.gene_root_dir + "/Tracks/"  
+                              
+    for r in ["TargetGenes", "TargetGenesRef"]:     
+        if not os.path.exists(args.output_dir + r):
+            os.makedirs(args.output_dir + r)
+            
+    if os.path.isdir(args.gene_root_dir):  
+        shutil.rmtree(args.gene_root_dir) 
+    
+    for r in [args.gene_root_dir, args.gene_stats_dir, args.gene_tracks_dir]:
+        os.mkdir(r)                    
+    
+    return(args)
+
 
 '''
 **** Scenario 
@@ -74,6 +100,16 @@ def determine_order(gencode, gene):
     return gencode, order 
 
 
+    
+'''
+subset_reference(args)
+grep genename from reference annotation using linux command
+'''
+def subset_reference(args):   
+    print("Subsetting", args.genename, "from", args.reference)
+    grepcmd = "grep {g} {f} > {d}/{o}".format(g=args.genename,f=args.reference,d=args.ref_output_dir, o=args.genename + '_gencode.gtf')
+    subprocess.run(grepcmd, shell=True)
+    
 '''
 Aim: Parse Gencode reference gtf of target gene and filter on exon genes
 *Important* Check this for every target gene that the final coordinates and exon number make sense
@@ -125,16 +161,20 @@ A |start1___end1|-----------|start2___end2|  (exon1, exon 2)
 B |start1__________end1|                     (exon1)
 
 '''
-def parse_gencode_reference(gencode_gtf, gene):
+def parse_gencode_reference(args):
+      
+    # subsetted from gencode annotation
+    gencode_gtf = args.ref_output_dir + "/" + args.genename + "_gencode.gtf"
   
     ## ----- Read and obtain coordinates
     print("**** Extracting gtf", file=sys.stdout)
-    print(gencode_gtf, file=sys.stdout)
+    logger.disabled = True
     gencode = read_gtf(gencode_gtf)
+    logger.disabled = False
     
     # obtain coordinates of known exons, note exons without exon_number in gencode are dropped
     gencode = gencode.loc[(gencode['feature'] == 'exon') & (gencode['gene_type'] == 'protein_coding') & 
-                          (gencode["gene_name"] == gene), ["seqname","start","end","exon_number","transcript_id"]]
+                          (gencode["gene_name"] == args.genename), ["seqname","start","end","exon_number","transcript_id"]]
     gencode["start_end"] = gencode['start'].astype(str) + gencode['end'].astype(str)
     gencode.replace("", float("NaN"), inplace=True)
     
@@ -146,7 +186,7 @@ def parse_gencode_reference(gencode_gtf, gene):
     
     ## ----- Determine direction
     # sort by start coordinates in order depending of if sense or antisense 
-    gencode, order = determine_order(gencode, gene) 
+    gencode, order = determine_order(gencode, args.genename) 
     
     # numeric 
     gencode[["exon_number"]] = gencode[["exon_number"]].apply(pd.to_numeric)
@@ -243,13 +283,20 @@ def parse_gencode_reference(gencode_gtf, gene):
     
     gencode['altPromoters'] = np.where(gencode['start_end'].isin(altPromoters), True, False)
     gencode["altTerminators"] = np.where(gencode['start_end'].isin(altTerminators),True,False)
+    
+    # write output
+    gencode.to_csv(args.gene_stats_dir + args.genename + "_flattened_gencode.csv",index=False)
 
     return(gencode, order)
 
 
-def replace_geneid(df, classf):
+def replace_geneid(args, df):
     if df['gene_id'].str.startswith('PB.').any():
         print('Converting gtf file from SQANTI: PB gene id to gene name')
+        
+        # read classification file 
+        print("Using", args.input_class)
+        classf = pd.read_csv(args.input_class, sep = "\t")
         
         # Create a dictionary mapping PB gene IDs to associated gene names
         gene_id_name = dict(zip(["PB." + i[1] for i in classf['isoform'].str.split(".")], classf['associated_gene']))
@@ -260,21 +307,23 @@ def replace_geneid(df, classf):
     return df
     
 
-def parse_transcriptome_gtf(input_gtf, gene, classf, order):
+def parse_transcriptome_gtf(args, order):
     
     '''
     Aim: Parse Input Gtf of target gene 
     '''
         
     # read gtf and filter only on exon (should only essentially remove "transcript" in gtf)
-    df = read_gtf(input_gtf)
+    logger.disabled = True
+    df = read_gtf(args.input_gtf)
+    logger.disabled = False
     
     # check if needs replacing the gene id column in the gtf from "PB.XX" to the gene name 
-    df = replace_geneid(df, classf)
+    df = replace_geneid(args, df)
     
     print("Total number of isoforms:", len(df["transcript_id"].unique()))
-    print("**** Extracting for transcripts associated with:", gene)
-    df = df[(df["gene_id"] == gene) & (df["feature"] == "exon")]
+    print("**** Extracting for transcripts associated with:", args.genename)
+    df = df[(df["gene_id"] == args.genename) & (df["feature"] == "exon")]
     
     if order == "antisense": 
         # reverse the rows
@@ -591,6 +640,8 @@ def generate_split_table(list2table,colname):
     # Create as dataframe, split the column by comma into two 
     df = pd.DataFrame({'Cat':list2table})
     df[['transcript_id', colname]] = df['Cat'].str.split(',', 1, expand=True)
+    df = df.drop('Cat', axis=1)
+    df = df.rename(columns={"transcript_id":"transcriptID"})
     
     return(df)
 
