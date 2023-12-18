@@ -561,6 +561,7 @@ def output_exon_skipping_stats(args, ES):
         ES_Transcripts = list(ES_Count.loc[ES_Count["numEvents"] != 0,].index)
 
         # write output
+        ES.to_csv(args.gene_stats_dir + args.genename + "_general_exon_level.csv", index = True)
         ES_SpecificExonSkipped.to_csv(args.gene_stats_dir + args.genename + "_ES_transcript_level.csv", index = False)
         ES_Count.to_csv(args.gene_stats_dir + args.genename + "_ES_events_counts.csv")
         num_exons_skipped_pertrans.to_csv(args.gene_stats_dir + args.genename + "_ES_exon_counts.csv")

@@ -3,7 +3,7 @@
 # Authors: Szi Kay Leung
 
 __author__  = "S.K.Leung@exeter.ac.uk"
-__version__ = '1.1.3'  # Python 3.7
+__version__ = '1.1.4'  # Python 3.7
 
 ## Load Libraries
 import gtfparse
@@ -31,6 +31,13 @@ from src import finalise_output as fo
 from src import generate_multiregion as gm
 from src import classify_mapt_isoforms as mapt
 pd.options.mode.chained_assignment = None  # default='warn'
+
+
+def directory(raw_path):
+    if not os.path.isdir(raw_path):
+        raise argparse.ArgumentTypeError('"{}" is not an existing directory'.format(raw_path))
+    return os.path.abspath(raw_path)
+
 
 def annotate_gene(args):
     
@@ -79,63 +86,62 @@ def annotate_gene(args):
         # QC: Check that the transcripts in the original transcriptome gtf captured in the final big list
         if set(df["transcript_id"].unique()) != set(set([i.split(';',3)[0] for i in All_FilteredParsed])):
             print("Mismatch transcripts")
-            print(set(df["transcript_id"].unique()))
-            print(set(set([i.split(';',3)[0] for i in All_FilteredParsed])))
+            print(set(df["transcript_id"].unique()) - set(set([i.split(';',3)[0] for i in All_FilteredParsed])))
             sys.exit(-1)
 
-        # Check for matching or somematching 
-        AllKnownMatch, SomeMatch = me.identify_all_matching_exons(gencode, df, All_FilteredParsed)
-
-        # Tabulate exon presence 
-        print("Tabulating exon presence")
-        exon_tab = es.tabulate_exon_presence(args, gencode, df, All_FilteredParsed)
-
-        if args.genename == "MAPT" or args.genename == "Mapt":
-            print("Further classifiying MAPT isoforms by exons 2, 3 and 10")
-            mapt_exon_tab, mapt_exon_tab_counts = mapt.classify_mapt_isoforms(species, exon_tab, gencode)
-            mapt_exon_tab.to_csv(args.gene_stats_dir + args.genename + "_further_classifications.csv",index_label="isoform")
-            mapt_exon_tab_counts.to_csv(args.gene_stats_dir + args.genename + "_further_classifications_counts.csv")
-
-        # Exon Skipping 
-        print("Processing transcripts for exon skipping")
-        ES = es.identify_exon_skipping(gencode,exon_tab,All_FilteredParsed)
-        ES = es.skip_not_AFexons(ES, gencode)
-        ES_Counts, ES_Transcripts = es.output_exon_skipping_stats(args, ES)
-
-        # Alternative First Promoter    
-        Alternative_First_Promoter = apat.identify_alternative_promoter(df, gencode, All_FilteredParsed)
-
-        # Alternative Termination 
-        Alternative_Termination = apat.identify_alternative_termination(df, gencode, All_FilteredParsed)
-
-        # Alternative First Exon 
-        AF, AF_Counts, AF_Transcripts = aprime.identify_alternative_first(df, All_FilteredParsed)
-
-        # Novel Exons 
+        # Novel Exons
         print("Identifying transcripts with novel exons")
         NE = ne.identify_novel_exon(args, df, gencode, All_FilteredParsed)
-        NE_classify, NExons_BeyondFirst, NExons_BeyondFirstLast, NExons_BeyondLast, NExons_Internal, NExons_First, NExons_Last = ne.classify_novel_exon(gencode, order, df, NE, All_FilteredParsed)
-        NE_Counts = pd.DataFrame()
-        if len(NE) > 0: NE_Counts = ne.novel_exon_stats(args, NE, NE_classify)
+        NE_classify, NExons_BeyondFirst, NExons_BeyondFirstLast, NExons_BeyondLast, NExons_Internal, NExons_First, NExons_Last = ne.classify_novel_exon(args, gencode, order, df, NE, All_FilteredParsed)
+        NE_Counts = ne.novel_exon_stats(args, NE, NE_classify)
+        
+        if not args.novelexon:
+            # Check for matching or somematching 
+            AllKnownMatch, SomeMatch = me.identify_all_matching_exons(gencode, df, All_FilteredParsed)
 
-        # Intron Retention 
-        print("Identifying transcripts with intron retention")
-        IR_Counts, IR_Transcripts, IR_Exon1, IR_LastExon = ir.identify_intron_retention(args, df, All_FilteredParsed, gencode)
+            # Tabulate exon presence 
+            print("Tabulating exon presence")
+            exon_tab = es.tabulate_exon_presence(args, gencode, df, All_FilteredParsed)
 
-        # Alternative A5' and A3' 
-        print("Identifying transcripts with alternative 5' and 3' sites")
-        A5A3_Counts, A5A3_Transcripts = aprime.identify_A5A3_transcripts(args, df, All_FilteredParsed)
+            if args.genename == "MAPT" or args.genename == "Mapt":
+                print("Further classifiying MAPT isoforms by exons 2, 3 and 10")
+                mapt_exon_tab, mapt_exon_tab_counts = mapt.classify_mapt_isoforms(species, exon_tab, gencode)
+                mapt_exon_tab.to_csv(args.gene_stats_dir + args.genename + "_further_classifications.csv",index_label="isoform")
+                mapt_exon_tab_counts.to_csv(args.gene_stats_dir + args.genename + "_further_classifications_counts.csv")
 
-        # Final Output 
-        # Event lists = each category is generated from previous functions and contain list of transcripts under that event type
-        categories = [AllKnownMatch, SomeMatch, A5A3_Transcripts, AF_Transcripts, 
-              Alternative_First_Promoter, Alternative_Termination,
-              ES_Transcripts, IR_Transcripts, IR_Exon1, IR_LastExon, NExons_BeyondFirst,
-              NExons_Internal,NExons_BeyondLast,NExons_BeyondFirstLast]
+            # Exon Skipping 
+            print("Processing transcripts for exon skipping")
+            ES = es.identify_exon_skipping(gencode,exon_tab,All_FilteredParsed)
+            ES = es.skip_not_AFexons(ES, gencode)
+            ES_Counts, ES_Transcripts = es.output_exon_skipping_stats(args, ES)
 
-        Transcript_Classifications = fo.generate_aggregated_classification(df, categories)
-        fo.prioritise_write_output(args, df, Transcript_Classifications)
-        fo.populate_classification(args, Transcript_Classifications, A5A3_Counts, IR_Counts, ES_Counts, NE_Counts)   
+            # Alternative First Promoter    
+            Alternative_First_Promoter = apat.identify_alternative_promoter(df, gencode, All_FilteredParsed)
+
+            # Alternative Termination 
+            Alternative_Termination = apat.identify_alternative_termination(df, gencode, All_FilteredParsed)
+
+            # Alternative First Exon 
+            AF, AF_Counts, AF_Transcripts = aprime.identify_alternative_first(df, All_FilteredParsed)
+
+            # Intron Retention 
+            print("Identifying transcripts with intron retention")
+            IR_Counts, IR_Transcripts, IR_Exon1, IR_LastExon = ir.identify_intron_retention(args, df, All_FilteredParsed, gencode)
+
+            # Alternative A5' and A3' 
+            print("Identifying transcripts with alternative 5' and 3' sites")
+            A5A3_Counts, A5A3_Transcripts = aprime.identify_A5A3_transcripts(args, df, All_FilteredParsed)
+
+            # Final Output 
+            # Event lists = each category is generated from previous functions and contain list of transcripts under that event type
+            categories = [AllKnownMatch, SomeMatch, A5A3_Transcripts, AF_Transcripts, 
+                  Alternative_First_Promoter, Alternative_Termination,
+                  ES_Transcripts, IR_Transcripts, IR_Exon1, IR_LastExon, NExons_BeyondFirst,
+                  NExons_Internal,NExons_BeyondLast,NExons_BeyondFirstLast]
+
+            Transcript_Classifications = fo.generate_aggregated_classification(df, categories)
+            fo.prioritise_write_output(args, df, Transcript_Classifications)
+            fo.populate_classification(args, Transcript_Classifications, A5A3_Counts, IR_Counts, ES_Counts, NE_Counts)   
     
     else:
         print("No detected isoforms")
@@ -152,13 +158,19 @@ def main():
     parser.add_argument("-g","--input_gtf", help='\t\tInput gtf file of all the final transcripts in long-read derived transcriptome.')
     parser.add_argument("-c","--input_class", help='\t\tSQANTI classification file')
     parser.add_argument("--cpat", help='\t\ORF_prob.best.tsv file generated from CPAT',required=False)
-    parser.add_argument("-o","--output_dir", help='\t\tOutput path for the annotation and associated files')
+    parser.add_argument("--novelexon", action='store_true', help='\t\tExtract novel exon only',required=False)
+    parser.add_argument("-o","--output_dir", type=directory, help='\t\tOutput path for the annotation and associated files')
     parser.add_argument("-v","--version", help="Display program version number.", action='version', version='FICLE '+str(__version__))
     
     args = parser.parse_args()
     print("************ Running FICLE...", file=sys.stdout)
     print("version:", __version__)
-    annotate_gene(args)        
     
+    
+    if args.novelexon:
+        print("**** Extracting novel exon only ****")
+        
+    annotate_gene(args) 
+       
 if __name__ == "__main__":
     main()

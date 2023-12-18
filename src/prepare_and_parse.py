@@ -305,6 +305,10 @@ def replace_geneid(args, df):
         
         # Replace PB gene IDs in the gtf file with the corresponding dictionary values
         df['gene_id'] = df['gene_id'].replace(gene_id_name)
+        
+        # filter isoforms that are classified as associated to gene of interest using classfile 
+        # don't just use the PBID.X from GTF as SQANTI3 misclassifies genes with the same PBID.X even though different
+        df = df[df["transcript_id"].isin(list(classf[classf["associated_gene"]==args.genename]["isoform"]))]
            
     return df
     
