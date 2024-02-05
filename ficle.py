@@ -84,6 +84,8 @@ def annotate_gene(args):
             print(set(set([i.split(';',3)[0] for i in All_FilteredParsed])))
             sys.exit(-1)
 
+	df=df[df["transcript_id"].isin([i.split(';',3)[0] for i in All_FilteredParsed])]
+
         # Check for matching or somematching 
         AllKnownMatch, SomeMatch = me.identify_all_matching_exons(gencode, df, All_FilteredParsed)
 
