@@ -40,7 +40,7 @@ def tabulate_exon_presence(args, gencode, df, All_FilteredParsed):
     Gencode_exons = ["Gencode_" + str(i) for i in range(1,max_exon+1)] 
 
     # Output as table 
-    df2 = pd.DataFrame(columns = Gencode_exons)
+    df2 = pd.DataFrame()
     data = []
 
     # Iterate through each transcript
@@ -66,10 +66,10 @@ def tabulate_exon_presence(args, gencode, df, All_FilteredParsed):
                     print("ERROR:", transcript)
                     sys.exit()
             else:
-                output.append(0) # only No classifications                 
-
+                output.append(0) # only No classifications
+                
         # Create a dictionary of the output to append to the table
-        zipped = zip(list(df2), output)
+        zipped = zip(Gencode_exons, output)
         a_dictionary = dict(zipped)
         data.append(a_dictionary)
 
@@ -121,7 +121,7 @@ Output: Table of all transcripts as rows and gencode exons as columns
 1 = Gencode exon is present 
 0 = Gencode exon not present
 '''
-def identify_exon_skipping(gencode,exon_tab,All_FilteredParsed):
+def identify_exon_skipping(args, gencode,exon_tab,All_FilteredParsed):
         
     # Create gencode list of possible exon numbers
     max_exon = max([int(i) for i in gencode["updated_exon_number"]])
@@ -218,6 +218,7 @@ def identify_exon_skipping(gencode,exon_tab,All_FilteredParsed):
 
     ES = ES.append(data, True)
     ES.index = exon_tab.index
+    ES.to_csv(args.gene_stats_dir + args.genename + "_general_tab.csv")
     
     return(ES)
 

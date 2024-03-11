@@ -111,7 +111,7 @@ def annotate_gene(args):
 
             # Exon Skipping 
             print("Processing transcripts for exon skipping")
-            ES = es.identify_exon_skipping(gencode,exon_tab,All_FilteredParsed)
+            ES = es.identify_exon_skipping(args,gencode,exon_tab,All_FilteredParsed)
             ES = es.skip_not_AFexons(ES, gencode)
             ES_Counts, ES_Transcripts = es.output_exon_skipping_stats(args, ES)
 
@@ -140,7 +140,11 @@ def annotate_gene(args):
                   NExons_Internal,NExons_BeyondLast,NExons_BeyondFirstLast]
 
             Transcript_Classifications = fo.generate_aggregated_classification(df, categories)
-            fo.prioritise_write_output(args, df, Transcript_Classifications)
+            if args.input_bed is not None:
+                print("****Generating bed files by AS events***")
+                fo.prioritise_write_output(args, df, Transcript_Classifications)
+            else:
+                print("****skipping generation of bed files by AS events***")
             fo.populate_classification(args, Transcript_Classifications, A5A3_Counts, IR_Counts, ES_Counts, NE_Counts)   
     
     else:
@@ -154,7 +158,7 @@ def main():
     parser = argparse.ArgumentParser(description="Full Isoform Characterisation from (Targeted) Long-read Experiments")
     parser.add_argument("-n","--genename", help='\t\tTarget gene symbol')
     parser.add_argument("-r","--reference", help='\t\tGene reference annotation (<gene>_gencode.gtf)')
-    parser.add_argument("-b","--input_bed", help='\t\tInput bed file of all the final transcripts in long-read derived transcriptome.')
+    parser.add_argument("-b","--input_bed", help='\t\tInput bed file of all the final transcripts in long-read derived transcriptome.',required=False, default = None)
     parser.add_argument("-g","--input_gtf", help='\t\tInput gtf file of all the final transcripts in long-read derived transcriptome.')
     parser.add_argument("-c","--input_class", help='\t\tSQANTI classification file')
     parser.add_argument("--cpat", help='\t\ORF_prob.best.tsv file generated from CPAT',required=False)
