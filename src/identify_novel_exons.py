@@ -20,22 +20,24 @@ def novel_exon_stats(args, NE, NE_classify):
     NE_pertrans_classify_counts = Number of novel exons (classified by internal etc) per transcript
     '''
     
-    # Table 1: Number of novel exons per transcript
-    # From the NE table, group by the number of transcripts
-    NE_pertrans_counts = NE.groupby(['transcriptID'])['novelexons'].count().reset_index()
-    NE_pertrans_counts.columns = ["transcriptID","numNovelExons"]
-    NE_pertrans_counts.to_csv(args.gene_stats_dir + args.genename + "_NE_transcript_counts.csv", index = False)
-    
-    # Output 3: 
-    NE_classify_counts = NE_classify.groupby(['novelexons']).count().reset_index()
-    NE_classify_counts.columns = ["typeNovelExon","numTranscripts"]
-    NE_classify_counts.to_csv(args.gene_stats_dir + args.genename + "_NE_type_counts.csv", index = False)
-    
-    # Output 4:
-    NE_pertrans_classify_counts = NE_classify.groupby(['novelexons','transcriptID']).size().reset_index()
-    NE_pertrans_classify_counts.columns = ['NEtype', 'transcriptId', 'numNovelExons']
-    NE_pertrans_counts.to_csv(args.gene_stats_dir + args.genename + "_NE_transcript_counts.csv", index = False)
-    print("Total Number of transcripts with novel exon: ", len(NE_pertrans_counts["transcriptID"]))
+    NE_pertrans_classify_counts = pd.DataFrame()
+    if len(NE) > 0:
+        # Table 1: Number of novel exons per transcript
+        # From the NE table, group by the number of transcripts
+        NE_pertrans_counts = NE.groupby(['transcriptID'])['novelexon'].count().reset_index()
+        NE_pertrans_counts.columns = ["transcriptID","numNovelExons"]
+        NE_pertrans_counts.to_csv(args.gene_stats_dir + args.genename + "_NE_transcript_counts.csv", index = False)
+
+        # Output 3: 
+        NE_classify_counts = NE_classify.groupby(['classification']).count().reset_index()
+        NE_classify_counts.columns = ["typeNovelExon","numTranscripts"]
+        NE_classify_counts.to_csv(args.gene_stats_dir + args.genename + "_NE_type_counts.csv", index = False)
+
+        # Output 4:
+        NE_pertrans_classify_counts = NE_classify.groupby(['classification','transcriptID']).size().reset_index()
+        NE_pertrans_classify_counts.columns = ['NEtype', 'transcriptId', 'numNovelExons']
+        NE_pertrans_counts.to_csv(args.gene_stats_dir + args.genename + "_NE_transcript_counts.csv", index = False)
+        print("Total Number of transcripts with novel exon: ", len(NE_pertrans_counts["transcriptID"]))
     
     return NE_pertrans_classify_counts
 
@@ -73,39 +75,30 @@ def identify_novel_exon(args, df, gencode, All_FilteredParsed):
             if result:
                 pass
             else:
-                output.append(transcript + ",Transcript_Exon" + str(exon))
+                # include chr, start and end coordinates 
+                # exon - 1 to account index from 0 in df
+                seqname = str(df.loc[df["transcript_id"] == transcript, "seqname"].values[exon - 1])
+                startCo = str(df.loc[df["transcript_id"] == transcript, "start"].values[exon - 1])
+                endCo = str(df.loc[df["transcript_id"] == transcript, "end"].values[exon - 1])
+                output.append(transcript + "," + str(exon) + "," + seqname + ":" + startCo + "-" + endCo + "," + startCo)
 
     output_df = pd.DataFrame()
     NE_coordinates = []
 
     try:
-        output_df = generate_split_table(output,"novelexons")
-
-        # Identify the coordinates of novel exons
-        for index, row in output_df.iterrows():
-            # subset the df gtf for transcripts with novel exon and reset index to 0 
-            transcript = row["transcriptID"]
-            subset_NE = df.loc[df["transcript_id"] == transcript].reset_index()
-            # Exon number of novel exon, minus 1 to account that the index of subset_NE is reset to 0 
-            n = int(row["novelexons"].replace("Transcript_Exon","")) - 1  
-            NE_coordinates.append(str(subset_NE.iloc[n]["start"]) + "," + str(subset_NE.iloc[n]["end"]))
-
-        print("Number of unique novel exons:" , len(set(NE_coordinates))) 
-
-        # convert list of coordinates to table for output
-        NE_coordinates = pd.DataFrame([np.unique(gencode["seqname"])[0] + " " + i.split(",")[0] + " " +  i.split(",")[1] 
-                                       for i in NE_coordinates])
-
-        if len(output_df) > 0:     
-            NE_coordinates.to_csv(args.gene_stats_dir + args.genename + "_NE_coordinates.csv", header=False, index=False)
-
+        output_df = pd.DataFrame([line.split(',') for line in output], columns=['transcriptID', 'novelexon', 'co-ordinates', 'start'])
+        # sort by ascending start coordinates
+        output_df = output_df.sort_values(by=['start']) 
+        output_df = output_df[["transcriptID","novelexon","co-ordinates"]]
+        print("Number of unique novel exons:" , len(set(output_df["co-ordinates"]))) 
+    
     except:
             print("no novel exons")
     
     return output_df
 
 
-def classify_novel_exon(gencode, order, df, NE, All_FilteredParsed):    
+def classify_novel_exon(args, gencode, order, df, NE, All_FilteredParsed):    
     
     '''
     Aim: Further classify location of novel exon as being beyond the first exon, internal or beyond the last exon
@@ -151,7 +144,7 @@ def classify_novel_exon(gencode, order, df, NE, All_FilteredParsed):
             # subset the transcriptome and reset index to find coordinates of novel exon
             subset = df[df["transcript_id"] == transcript].reset_index()
             # strip the column from the novel exon table for the number 
-            novel_exon = str(row["novelexons"].split("_", 2)[1]).strip("Exon")
+            novel_exon = str(row["novelexon"])
             # -1 to consider the index starts at 0
             novel_exon_start = subset.loc[int(novel_exon) -1,"start"]
             novel_exon_end = subset.loc[int(novel_exon) -1 ,"end"]
@@ -194,12 +187,17 @@ def classify_novel_exon(gencode, order, df, NE, All_FilteredParsed):
                         print("Transcript not classified for Novel Exons:", transcript)
 
         # Generate output table, of the number of exons that are beyond first, internal, beyond last for each transcript
-        output_df = generate_split_table(NovelExons_Subcategory,"novelexons")
+        output_df = generate_split_table(NovelExons_Subcategory,"classification")
+        
+        # Write output of novel exon coordinates for each transcript with classification
+        final = pd.concat([NE, output_df["classification"]], axis=1)
+        final.to_csv(args.gene_stats_dir + args.genename + "_NE_coordinates.csv", index=False)
+
 
         # Generate list of transcripts with those classifications:
         # Prioritise Beyond_First Last, then Beyond First, Beyond  Last and Internal
         for transcript in output_df["transcriptID"].unique():
-            novel_exon_types = list(output_df.loc[output_df["transcriptID"] == transcript,"novelexons"])
+            novel_exon_types = list(output_df.loc[output_df["transcriptID"] == transcript,"classification"])
             if "Beyond_First_Last" in novel_exon_types:
                 NExons_BeyondFirstLast.append(transcript)
             elif "Beyond_First" in novel_exon_types:

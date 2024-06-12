@@ -40,7 +40,10 @@ def identify_alternative_termination(df, gencode, All_FilteredParsed):
     AT = []
     for transcript in df["transcript_id"].unique(): 
         dat = class_by_transcript_pd(transcript, All_FilteredParsed)
-        gencode_maxexon = max([int(i) for i in dat["GencodeExon"].values])
+        if len(dat["GencodeExon"].values) != 0:
+          gencode_maxexon = max([int(i) for i in dat["GencodeExon"].values])
+        else:
+          gencode_maxexon = 0
 
         if str(gencode_maxexon) not in alt_last_exon:
             AT.append(transcript)

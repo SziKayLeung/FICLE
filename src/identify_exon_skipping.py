@@ -47,7 +47,6 @@ def tabulate_exon_presence(args, gencode, df, All_FilteredParsed):
     for transcript in df_transcript_id:     
 
         tdat = class_by_transcript_pd(transcript, All_FilteredParsed)
-        maxgencodexon = max(tdat["GencodeExon"])
 
         # Iterate through each gencode exon
         output = []
@@ -66,8 +65,8 @@ def tabulate_exon_presence(args, gencode, df, All_FilteredParsed):
                     print("ERROR:", transcript)
                     sys.exit()
             else:
-                output.append(0) # only No classifications                 
-
+                output.append(0) # only No classifications
+                
         # Create a dictionary of the output to append to the table
         zipped = zip(list(df2), output)
         a_dictionary = dict(zipped)
@@ -121,7 +120,7 @@ Output: Table of all transcripts as rows and gencode exons as columns
 1 = Gencode exon is present 
 0 = Gencode exon not present
 '''
-def identify_exon_skipping(gencode,exon_tab,All_FilteredParsed):
+def identify_exon_skipping(args, gencode,exon_tab,All_FilteredParsed):
         
     # Create gencode list of possible exon numbers
     max_exon = max([int(i) for i in gencode["updated_exon_number"]])
@@ -135,10 +134,12 @@ def identify_exon_skipping(gencode,exon_tab,All_FilteredParsed):
     for index, row in exon_tab.iterrows():
         pre_value = []
         output = []
-        
         # last exon detected for transcript
         dat = class_by_transcript_pd(index, All_FilteredParsed)
-        transcript_lastexon = max([int(i) for i in dat["GencodeExon"].values])
+        if len(dat["GencodeExon"].values) != 0:
+          transcript_lastexon = max([int(i) for i in dat["GencodeExon"].values])
+        else:
+          transcript_lastexon = 1
         #print(transcript_lastexon)
       
         # iterate through each value in the sequence of that row
@@ -218,6 +219,7 @@ def identify_exon_skipping(gencode,exon_tab,All_FilteredParsed):
 
     ES = ES.append(data, True)
     ES.index = exon_tab.index
+    ES.to_csv(args.gene_stats_dir + args.genename + "_general_tab.csv")
     
     return(ES)
 
@@ -561,6 +563,7 @@ def output_exon_skipping_stats(args, ES):
         ES_Transcripts = list(ES_Count.loc[ES_Count["numEvents"] != 0,].index)
 
         # write output
+        ES.to_csv(args.gene_stats_dir + args.genename + "_general_exon_level.csv", index = True)
         ES_SpecificExonSkipped.to_csv(args.gene_stats_dir + args.genename + "_ES_transcript_level.csv", index = False)
         ES_Count.to_csv(args.gene_stats_dir + args.genename + "_ES_events_counts.csv")
         num_exons_skipped_pertrans.to_csv(args.gene_stats_dir + args.genename + "_ES_exon_counts.csv")
