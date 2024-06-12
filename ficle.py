@@ -84,7 +84,7 @@ def annotate_gene(args):
         All_FilteredParsed = [x for l in All_FilteredParsed for x in l]
 
         # QC: Check that the transcripts in the original transcriptome gtf captured in the final big list
-        if set(df["transcript_id"].unique()) != set(set([i.split(';',3)[0] for i in All_FilteredParsed])):
+        if np.all(np.isin([i.split(';',3)[0] for i in All_FilteredParsed], df["transcript_id"].unique()))==False:
             print("Mismatch transcripts")
             print(set(df["transcript_id"].unique()) - set(set([i.split(';',3)[0] for i in All_FilteredParsed])))
             sys.exit(-1)

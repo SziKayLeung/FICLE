@@ -36,14 +36,15 @@ create output directories <TargetGenesRef> and <TargetGenes>
 '''
 def create_output_dir(args):
     # create output directories 
-    args.ref_output_dir = args.output_dir + "TargetGenesRef"
-    args.gene_root_dir = args.output_dir + "TargetGenes/" + args.genename
+    args.ref_output_dir = args.output_dir + "/TargetGenesRef"
+    args.gene_root_dir = args.output_dir + "/TargetGenes/" + args.genename
     args.gene_stats_dir = args.gene_root_dir + "/Stats/"                          
     args.gene_tracks_dir = args.gene_root_dir + "/Tracks/"  
                               
-    for r in ["TargetGenes", "TargetGenesRef"]:     
-        if not os.path.exists(args.output_dir + r):
-            os.makedirs(args.output_dir + r)
+     
+    if not os.path.exists(args.ref_output_dir):
+        os.makedirs(args.ref_output_dir)
+        os.makedirs(args.output_dir + "/TargetGenes/" )
             
     if os.path.isdir(args.gene_root_dir):  
         shutil.rmtree(args.gene_root_dir) 
