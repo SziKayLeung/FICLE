@@ -60,7 +60,10 @@ def identify_intron_retention(args, df, All_FilteredParsed, gencode):
     
         trans_df = class_by_transcript_pd(transcript, All_FilteredParsed)
         trans_df["TranscriptExon"] = [int(i.replace("Exon","")) for i in trans_df["TranscriptExon"]]
-        last_exon = trans_df.loc[trans_df['TranscriptExon'].idxmax(),"GencodeExon"]
+        if len(trans_df["GencodeExon"].values) != 0:
+          last_exon = trans_df.loc[trans_df['TranscriptExon'].idxmax(),"GencodeExon"]
+        else:
+          last_exon = 0
         IR_df = trans_df.loc[trans_df["Class"].isin(["IR","IRMatch"]),]
         # remove first exon IR if extend beyond A5'
         trans_df = trans_df.loc[(trans_df["GencodeExon"] != 1) & (trans_df["IRDir"] != "A5")]

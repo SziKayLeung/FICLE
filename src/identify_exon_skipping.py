@@ -40,14 +40,13 @@ def tabulate_exon_presence(args, gencode, df, All_FilteredParsed):
     Gencode_exons = ["Gencode_" + str(i) for i in range(1,max_exon+1)] 
 
     # Output as table 
-    df2 = pd.DataFrame()
+    df2 = pd.DataFrame(columns = Gencode_exons)
     data = []
 
     # Iterate through each transcript
     for transcript in df_transcript_id:     
 
         tdat = class_by_transcript_pd(transcript, All_FilteredParsed)
-        maxgencodexon = max(tdat["GencodeExon"])
 
         # Iterate through each gencode exon
         output = []
@@ -69,7 +68,7 @@ def tabulate_exon_presence(args, gencode, df, All_FilteredParsed):
                 output.append(0) # only No classifications
                 
         # Create a dictionary of the output to append to the table
-        zipped = zip(Gencode_exons, output)
+        zipped = zip(list(df2), output)
         a_dictionary = dict(zipped)
         data.append(a_dictionary)
 
@@ -135,10 +134,12 @@ def identify_exon_skipping(args, gencode,exon_tab,All_FilteredParsed):
     for index, row in exon_tab.iterrows():
         pre_value = []
         output = []
-        
         # last exon detected for transcript
         dat = class_by_transcript_pd(index, All_FilteredParsed)
-        transcript_lastexon = max([int(i) for i in dat["GencodeExon"].values])
+        if len(dat["GencodeExon"].values) != 0:
+          transcript_lastexon = max([int(i) for i in dat["GencodeExon"].values])
+        else:
+          transcript_lastexon = 1
         #print(transcript_lastexon)
       
         # iterate through each value in the sequence of that row
