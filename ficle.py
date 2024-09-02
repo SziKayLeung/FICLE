@@ -84,12 +84,12 @@ def annotate_gene(args):
         All_FilteredParsed = [x for l in All_FilteredParsed for x in l]
 
         # QC: Check that the transcripts in the original transcriptome gtf captured in the final big list
+        
         if np.all(np.isin([i.split(';',3)[0] for i in All_FilteredParsed], df["transcript_id"].unique()))==False:
             print("Mismatch transcripts")
             print(set(df["transcript_id"].unique()) - set(set([i.split(';',3)[0] for i in All_FilteredParsed])))
             sys.exit(-1)
 
-        # Novel Exons
         print("Identifying transcripts with novel exons")
         NE = ne.identify_novel_exon(args, df, gencode, All_FilteredParsed)
         NE_classify, NExons_BeyondFirst, NExons_BeyondFirstLast, NExons_BeyondLast, NExons_Internal, NExons_First, NExons_Last = ne.classify_novel_exon(args, gencode, order, df, NE, All_FilteredParsed)
