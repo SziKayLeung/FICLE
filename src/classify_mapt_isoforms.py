@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from prepare_and_parse import reidentify_isoform_dataset
 
-def identify_mapt_exon2_3_17(species, gencode):
+def identify_mapt_exon2_3_17(args, species, gencode):
     '''
     Aim: Identify from the flattened structure of MAPT (using the parse_gencode_reference()), the exons corresponding to
     exon 2, exon 3 and exon 10 in the genome ("species")
@@ -37,7 +37,8 @@ def identify_mapt_exon2_3_17(species, gencode):
     
     # Add the word "Gencode" in front of the updated exon number for downstream subsetting
     output['MAPT_mod_exon'] = 'Gencode_' + output['MAPT_mod_exon'].astype(str)
-    
+    output.to_csv(args.gene_stats_dir + args.genename + "_identified_originalExonNum.csv", index = False)
+
     return(output)
 
 
@@ -47,6 +48,9 @@ def identify_first_exon_pos(lst):
     Params:
         lst = list of 0s and 1s from the row of the exon table
     '''
+    # set as -1 as may have upstream transcripts that beyond known first exon 
+    first_exon_occurence = 0
+    
     # loop through the list
     for count, exon in enumerate(lst):
         # continue through the list until it is no longer "1"
@@ -56,10 +60,36 @@ def identify_first_exon_pos(lst):
             break
         else:
             continue
+    
     return(first_exon_occurence)
+    
 
+def identify_last_exon_pos(lst, max_mapt_exons):
+    '''
+    Aim: Find the position of the last exon 
+    Params:
+        lst = list of 0s and 1s from the row of the exon table
 
-def classify_mapt_isoforms(species, mapt_exon_tab, gencode):
+    '''
+    
+    # reverse the list so counting from end 
+    reversedlist = reversed(lst)
+    
+    # set as 0 as may have upstream transcripts that beyond known first exon 
+    last_exon_occurence = 0
+    
+    # loop through the list
+    for count, exon in enumerate(reversedlist):
+        # detected exon from the end, then record
+        if exon == 1:
+            last_exon_occurence = max_mapt_exons - count
+            break
+        else:
+            continue
+    return(last_exon_occurence)
+    
+
+def classify_mapt_isoforms(args, species, mapt_exon_tab, gencode):
     '''
     Aim: Classify the mapt isoforms by the the skipping and presence of exons 2, 3, and 10 (according to literature)
     params: 
@@ -72,15 +102,34 @@ def classify_mapt_isoforms(species, mapt_exon_tab, gencode):
     '''
     
     # apply the function to identify the updated exon number to work with 
-    mapt_exons = identify_mapt_exon2_3_17(species, gencode)
+    mapt_exons = identify_mapt_exon2_3_17(args, species, gencode)
+    
+    # total number of exons detected
+    max_mapt_exons = len(mapt_exon_tab.columns)
    
     # to identify transcripts that have an alternative first exon downstream of exons 2 and exon 3
     missing_e2_e3 = []
     for index, row in mapt_exon_tab.iterrows():
         first_exon_occurence = identify_first_exon_pos(row.values) 
-        if first_exon_occurence > 3:
+        if first_exon_occurence == 0:
+            print("first exon beyond first known exon:", index)
+        elif first_exon_occurence > 3:
             missing_e2_e3.append(index)
-    
+        else:
+            pass
+            
+    # to identify transcripts that have alternative last exon before exon 11 (i.e. do not know if truncated before)
+    matchedExon10 = int(mapt_exons.loc[mapt_exons["MAPT_orig_exon"]==10,"MAPT_mod_exon"].values[0].replace('Gencode_', ''))
+    missing_e11 = []
+    for index, row in mapt_exon_tab.iterrows():
+        last_exon_occurence = identify_last_exon_pos(row.values, max_mapt_exons) 
+        if last_exon_occurence == 0:
+            print("last exon beyond known last exon:", index)
+        if last_exon_occurence < matchedExon10 + 1:
+            missing_e11.append(index)
+        else:
+            pass
+        
     # extract the columns based on the updated exon number    
     df = mapt_exon_tab[mapt_exon_tab.columns.intersection(mapt_exons["MAPT_mod_exon"])]
     
@@ -93,6 +142,9 @@ def classify_mapt_isoforms(species, mapt_exon_tab, gencode):
         # if the transcript is within the list of missing exons 2 and exon 3, but exon 10 skipped
         elif index in missing_e2_e3 and row[2] == 0: 
             output.append("E2E3'3R")
+        # if the transcript has exons 2 and exon 3, but transcript ends before exon 11 i.e difficult to ascertain transcript ratio 
+        elif index in missing_e11:    
+            output.append("E10Truncated")
         else:
             # exon 2, exon 3 skipped, exon 10 present
             if row[0] == 0 and row[1] == 0 and row[2] == 1:

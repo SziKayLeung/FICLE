@@ -14,10 +14,10 @@ import collections
 from collections import Counter
 import csv
 import sys
-import sys
 import shutil
 import os
 import argparse
+import os.path
 
 sys.path.append("/src")
 from src import prepare_and_parse as prep
@@ -105,7 +105,7 @@ def annotate_gene(args):
 
             if args.genename == "MAPT" or args.genename == "Mapt":
                 print("Further classifiying MAPT isoforms by exons 2, 3 and 10")
-                mapt_exon_tab, mapt_exon_tab_counts = mapt.classify_mapt_isoforms(species, exon_tab, gencode)
+                mapt_exon_tab, mapt_exon_tab_counts = mapt.classify_mapt_isoforms(args, species, exon_tab, gencode)
                 mapt_exon_tab.to_csv(args.gene_stats_dir + args.genename + "_further_classifications.csv",index_label="isoform")
                 mapt_exon_tab_counts.to_csv(args.gene_stats_dir + args.genename + "_further_classifications_counts.csv")
 
@@ -163,12 +163,22 @@ def main():
     parser.add_argument("-c","--input_class", help='\t\tSQANTI classification file')
     parser.add_argument("--cpat", help='\t\ORF_prob.best.tsv file generated from CPAT',required=False)
     parser.add_argument("--novelexon", action='store_true', help='\t\tExtract novel exon only',required=False)
+    parser.add_argument("--geneid", help='\t\geneid for when input_gtf does not match genename',required=False, default=None)
     parser.add_argument("-o","--output_dir", type=directory, help='\t\tOutput path for the annotation and associated files')
     parser.add_argument("-v","--version", help="Display program version number.", action='version', version='FICLE '+str(__version__))
     
     args = parser.parse_args()
     print("************ Running FICLE...", file=sys.stdout)
     print("version:", __version__)
+    
+    ## sanity check
+    if not os.path.exists(args.input_gtf):
+      print("input gtf file {0} does not exist. Abort.".format(args.input_gtf), file=sys.stderr)
+      sys.exit
+      
+    if not os.path.exists(args.input_class):
+      print("input classification file {0} does not exist. Abort.".format(args.input_class), file=sys.stderr)
+      sys.exit(-1)
     
     
     if args.novelexon:
