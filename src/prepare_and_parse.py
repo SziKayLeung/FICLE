@@ -10,6 +10,7 @@ import shutil
 import logging 
 from gtfparse import read_gtf
 import warnings
+import re
 warnings.simplefilter(action='ignore', category=FutureWarning) #gtfparse future warnings
 
 logger = logging.getLogger()
@@ -310,6 +311,24 @@ def replace_geneid(args, df):
         # filter isoforms that are classified as associated to gene of interest using classfile 
         # don't just use the PBID.X from GTF as SQANTI3 misclassifies genes with the same PBID.X even though different
         df = df[df["transcript_id"].isin(list(classf[classf["associated_gene"]==args.genename]["isoform"]))]
+        
+    elif any(chr.isdigit() for chr in df['gene_id'][1]) and not any(chr.isdigit() for chr in args.genename):
+        
+        if args.geneid is not None:
+          
+          print("Using", args.input_class)
+          classf = pd.read_csv(args.input_class, sep = "\t")
+          df = df[df["transcript_id"].isin(list(classf[classf["associated_gene"]==args.genename]["isoform"]))]
+          df['gene_id'] = df['gene_id'].str.replace(args.geneid,args.genename)
+
+        else:
+          
+          print("Unexpected gene_id format (i.e. {0}) in input_gtf; does not match with input gene format. Abort.".format(df['gene_id'][1]), file=sys.stderr)
+          print("Solution: Add argument --geneid with correct gene id or provide corrected gtf", file=sys.stderr)
+          sys.exit(-1)
+    
+    else:
+        pass
            
     return df
     
@@ -324,11 +343,11 @@ def parse_transcriptome_gtf(args, order):
     logger.disabled = True
     df = read_gtf(args.input_gtf)
     logger.disabled = False
+    print("Total number of isoforms:", len(df["transcript_id"].unique()))
     
     # check if needs replacing the gene id column in the gtf from "PB.XX" to the gene name 
     df = replace_geneid(args, df)
     
-    print("Total number of isoforms:", len(df["transcript_id"].unique()))
     print("**** Extracting for transcripts associated with:", args.genename)
     df = df[(df["gene_id"] == args.genename) & (df["feature"] == "exon")]
     
