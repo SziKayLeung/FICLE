@@ -4,3 +4,5 @@
 .Ruserdata
 src/__pycache__/
 FICLE.Rproj
+__pycache__
+.ipynb_checkpoints/
