@@ -1,6 +1,8 @@
 .Rproj.user
 .Rhistory
 .RData
+*.o*
+*.e*
 .Ruserdata
 src/__pycache__/
 FICLE.Rproj
